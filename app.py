@@ -25,7 +25,17 @@ from betting import init_betting
 from betting.db import connect, init_schema
 from betting.odds_math import extract_probs_from_fight_row, odds_pair_from_probs_vig
 from betting.service import get_user
-from iptv import IptvError, M3UCache, RateLimiter, fetch_m3u_parse_streaming, maybe_github_raw, playlist_candidate_urls, probe_url
+from iptv import (
+    IptvError,
+    M3UCache,
+    RateLimiter,
+    fetch_m3u_parse_streaming,
+    fetch_with_redirect_limit,
+    maybe_github_raw,
+    playlist_candidate_urls,
+    probe_url,
+    validate_public_http_url,
+)
 from sports import DEFAULT_SPORT, get_analyzer, list_sport_ids
 from sports.ufc_urls import allowed_ufc_image_url
 from ufc_events import fetch_events_list
@@ -35,6 +45,9 @@ DEFAULT_URL = "https://www.ufc.com.br/event/ufc-fight-night-march-28-2026"
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "dev-secret-change-me"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = bool(os.environ.get("VERCEL"))
 
 # IPTV defaults (pode sobrescrever por env)
 app.config["IPTV_MAX_BYTES"] = int(os.environ.get("IPTV_MAX_BYTES") or "60000000")  # 60MB
@@ -50,7 +63,6 @@ if os.environ.get("VERCEL"):
     _tmp = Path(tempfile.gettempdir()) / "ufc_instance"
     _tmp.mkdir(parents=True, exist_ok=True)
     app.config["BETTING_DB_PATH"] = str(_tmp / "betting.sqlite3")
-    app.config["SESSION_COOKIE_SECURE"] = True
 
 init_betting(app)
 app.register_blueprint(admin_bp)
@@ -133,6 +145,32 @@ def _is_hls_manifest(url: str, ct: str) -> bool:
         return True
     low = (url or "").lower()
     return ".m3u8" in low
+
+
+@app.after_request
+def _set_security_headers(resp: Response):
+    # Headers padrão de hardening para reduzir superfície de ataque no browser.
+    csp = (
+        "default-src 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' https: data:; "
+        "font-src 'self' data:; "
+        "media-src 'self' https:; "
+        "connect-src 'self'; "
+        "form-action 'self'; "
+        "upgrade-insecure-requests"
+    )
+    resp.headers.setdefault("Content-Security-Policy", csp)
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    resp.headers.setdefault("X-XSS-Protection", "0")
+    return resp
 
 
 def _to_stream_proxy_url(absolute_url: str) -> str:
@@ -696,14 +734,15 @@ def api_analyze():
             cache_hours=24.0,
             refresh=refresh,
         )
-    except Exception as e:
+    except Exception:
+        app.logger.exception("Falha inesperada em /api/analyze")
         return jsonify(
             {
                 "ok": False,
                 "sport": sport,
                 "event_url": url,
                 "fights": [],
-                "errors": [str(e) or type(e).__name__],
+                "errors": ["Falha interna ao analisar evento."],
             }
         ), 500
     try:
@@ -822,10 +861,12 @@ def api_iptv_m3u():
         return jsonify(payload)
     except IptvError as e:
         return jsonify({"ok": False, "errors": [e.message], "source_url": original_url, "fetched_url": url}), e.http_status
-    except requests.RequestException as e:
-        return jsonify({"ok": False, "errors": [f"Falha ao baixar M3U: {e}"]}), 502
-    except Exception as e:
-        return jsonify({"ok": False, "errors": [f"Falha ao ler M3U: {e}"]}), 502
+    except requests.RequestException:
+        app.logger.warning("Falha de rede em /api/iptv/m3u", exc_info=True)
+        return jsonify({"ok": False, "errors": ["Falha de rede ao baixar M3U."]}), 502
+    except Exception:
+        app.logger.exception("Falha inesperada em /api/iptv/m3u")
+        return jsonify({"ok": False, "errors": ["Falha ao processar M3U."]}), 502
 
 
 @app.route("/api/iptv/settings")
@@ -845,8 +886,10 @@ def api_iptv_probe():
         return rl
     original_url = (request.args.get("url") or "").strip()
     url = maybe_github_raw(original_url)
-    if not url:
-        return jsonify({"ok": False, "errors": ["URL vazia"]}), 400
+    try:
+        validate_public_http_url(url)
+    except IptvError as e:
+        return jsonify({"ok": False, "errors": [e.message]}), e.http_status
 
     headers = {
         "User-Agent": (
@@ -870,10 +913,12 @@ def api_iptv_probe():
         return jsonify({"ok": True, "url": original_url, "fetched_url": url, **p})
     except IptvError as e:
         return jsonify({"ok": False, "errors": [e.message], "url": original_url, "fetched_url": url}), e.http_status
-    except requests.RequestException as e:
-        return jsonify({"ok": False, "errors": [f"Probe falhou: {e}"]}), 502
-    except Exception as e:
-        return jsonify({"ok": False, "errors": [f"Probe falhou: {e}"]}), 502
+    except requests.RequestException:
+        app.logger.warning("Falha de rede em /api/iptv/probe", exc_info=True)
+        return jsonify({"ok": False, "errors": ["Probe falhou por erro de rede."]}), 502
+    except Exception:
+        app.logger.exception("Falha inesperada em /api/iptv/probe")
+        return jsonify({"ok": False, "errors": ["Probe falhou."]}), 502
 
 
 @app.route("/api/iptv/stream")
@@ -887,8 +932,10 @@ def api_iptv_stream():
         return rl
     raw = (request.args.get("url") or "").strip()
     url = maybe_github_raw(raw)
-    if not _is_http_url(url):
-        return jsonify({"ok": False, "errors": ["URL inválida (use http/https)."]}), 400
+    try:
+        validate_public_http_url(url)
+    except IptvError as e:
+        return jsonify({"ok": False, "errors": [e.message]}), e.http_status
 
     headers = {
         "User-Agent": (
@@ -902,15 +949,21 @@ def api_iptv_stream():
         headers["Range"] = rg
 
     try:
-        upstream = requests.get(
+        sess = requests.Session()
+        upstream = fetch_with_redirect_limit(
+            sess,
             url,
+            method="GET",
             headers=headers,
-            stream=True,
             timeout=25,
-            allow_redirects=True,
+            max_redirects=int(app.config.get("IPTV_MAX_REDIRECTS") or 3),
+            stream=True,
         )
-    except requests.RequestException as e:
-        return jsonify({"ok": False, "errors": [f"Falha ao buscar stream: {e}"]}), 502
+    except IptvError as e:
+        return jsonify({"ok": False, "errors": [e.message]}), e.http_status
+    except requests.RequestException:
+        app.logger.warning("Falha de rede em /api/iptv/stream", exc_info=True)
+        return jsonify({"ok": False, "errors": ["Falha de rede ao buscar stream."]}), 502
 
     ct = _norm_ct(upstream.headers.get("Content-Type"))
     final_url = upstream.url or url
@@ -929,7 +982,6 @@ def api_iptv_stream():
             mimetype="application/vnd.apple.mpegurl",
             headers={
                 "Cache-Control": "no-store",
-                "Access-Control-Allow-Origin": "*",
             },
         )
 
@@ -939,7 +991,6 @@ def api_iptv_stream():
         if v:
             pass_headers[h] = v
     pass_headers["Cache-Control"] = "no-store"
-    pass_headers["Access-Control-Allow-Origin"] = "*"
 
     def _gen():
         try:

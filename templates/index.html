@@ -257,13 +257,13 @@
             predicted_method: f.predicted_method,
           })),
         };
-        localStorage.setItem(PRED_SNAP_KEY, JSON.stringify(snap));
+        sessionStorage.setItem(PRED_SNAP_KEY, JSON.stringify(snap));
       } catch (_) {}
     }
 
     function loadPredictionSnapshot() {
       try {
-        const raw = localStorage.getItem(PRED_SNAP_KEY);
+        const raw = sessionStorage.getItem(PRED_SNAP_KEY);
         return raw ? JSON.parse(raw) : null;
       } catch (_) {
         return null;
