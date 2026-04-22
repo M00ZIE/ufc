@@ -267,6 +267,8 @@ Inclui testes de allowlist de URLs, registro de esportes, odds, `mma_predict`, p
 | `FLASK_SECRET_KEY` | Chave secreta Flask (sessões). **Obrigatória em produção**; em dev existe um valor padrão inseguro. |
 | `BETTING_DB_PATH` | Caminho alternativo para o arquivo SQLite de apostas. |
 | `BETTING_ADMIN_EMAILS` | Lista separada por vírgulas: emails que recebem `is_admin=1` no **cadastro**. |
+| `BETTING_DEFAULT_ADMIN_EMAIL` | Email opcional para criar/elevar conta admin inicial no boot (sem hardcode no código). |
+| `BETTING_DEFAULT_ADMIN_PASSWORD` | Senha opcional da conta admin inicial (use segredo no ambiente; mínimo 8 caracteres). |
 | `BETTING_SETTLE_KEY` | Se definida, permite `POST /api/bet/settle` com o header **`X-Settle-Key`** sem ser admin. |
 | `MMA_LEARNING_DATA_DIR` | Diretório do SQLite do módulo de aprendizagem (`mma_predict`). Em serverless, há fallback automático para `/tmp`. |
 

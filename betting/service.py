@@ -24,19 +24,30 @@ INITIAL_CREDITS = 1000
 STAKE_MAX_FRACTION = 0.20
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
-DEFAULT_ADMIN_EMAIL = "astrosoprime@gmail.com"
-DEFAULT_ADMIN_PASSWORD = "Senha1337#"
-
 
 def ensure_default_admin(conn: sqlite3.Connection) -> None:
-    """Garante conta admin inicial (email/senha fixos na primeira execução)."""
-    email = DEFAULT_ADMIN_EMAIL.strip().lower()
+    """
+    Garante admin inicial somente via variáveis de ambiente.
+
+    - BETTING_DEFAULT_ADMIN_EMAIL
+    - BETTING_DEFAULT_ADMIN_PASSWORD
+    """
+    email = (os.environ.get("BETTING_DEFAULT_ADMIN_EMAIL") or "").strip().lower()
+    password = (os.environ.get("BETTING_DEFAULT_ADMIN_PASSWORD") or "").strip()
+    if not email or not password:
+        return
+    if not EMAIL_RE.match(email):
+        return
+    if len(password) < 8:
+        return
+
     row = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
     if row:
         conn.execute("UPDATE users SET is_admin = 1 WHERE email = ?", (email,))
         conn.commit()
         return
-    ph = _hash_password(DEFAULT_ADMIN_PASSWORD)
+
+    ph = _hash_password(password)
     cur = conn.execute(
         "INSERT INTO users (email, password_hash, balance, is_admin, blocked) VALUES (?, ?, ?, 1, 0)",
         (email, ph, INITIAL_CREDITS),
