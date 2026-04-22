@@ -71,6 +71,17 @@
     .s-kpi { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-panel); padding: .6rem .75rem; }
     .s-kpi-k { color: var(--text-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
     .s-kpi-v { margin-top: .25rem; font-weight: 800; font-size: 1.15rem; color: var(--text); }
+    .s-guide {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(255,255,255,.02);
+      padding: .65rem .75rem;
+      margin-bottom: .9rem;
+      color: var(--text-muted);
+      font-size: .84rem;
+      line-height: 1.45;
+    }
+    .s-guide strong { color: var(--text); }
 
     .s-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
     .s-card { border: 1px solid var(--border); border-radius: 14px; background: var(--bg-panel); box-shadow: var(--shadow-card); overflow: hidden; }
@@ -89,10 +100,15 @@
     .s-pill.risky { color: #fde68a; border-color: rgba(241,196,15,.35); background: rgba(241,196,15,.12); }
     .s-pill.value { color: #c4b5fd; border-color: rgba(139,92,246,.35); background: rgba(139,92,246,.12); }
     .s-pill.side { color: #fecaca; border-color: rgba(255,59,59,.35); background: rgba(255,59,59,.12); }
+    .s-pill.good { color: #86efac; border-color: rgba(46,204,113,.35); background: rgba(46,204,113,.12); }
+    .s-pill.warn { color: #fdba74; border-color: rgba(251,146,60,.35); background: rgba(251,146,60,.14); }
+    .s-pill.bad { color: #fca5a5; border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.14); }
 
     .s-kpis { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .4rem .5rem; margin-top: .45rem; font-size: .78rem; color: var(--text-muted); }
     .s-kpi-chip { padding: .3rem .45rem; border-radius: 8px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.02); }
     .s-kpi-chip strong { color: var(--text); font-variant-numeric: tabular-nums; }
+    .s-kpi-chip .pos { color: #86efac; }
+    .s-kpi-chip .neg { color: #fca5a5; }
     .s-bar-wrap { margin-top: .45rem; }
     .s-bar-head { display: flex; justify-content: space-between; font-size: .74rem; color: var(--text-muted); margin-bottom: .24rem; }
     .s-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
@@ -188,6 +204,12 @@
         <div class="s-kpi-v" id="kpiProfile">—</div>
       </article>
     </section>
+    <section class="s-guide" aria-label="Como interpretar">
+      <strong>Como ler rapido:</strong>
+      Chance do modelo acima de 60% e lucro esperado positivo tendem a ser melhores.
+      <strong>SAFE</strong> = menor risco, <strong>RISKY</strong> = maior variacao.
+      Se aparecer <strong>Evitar</strong>, a odd pode nao compensar.
+    </section>
 
     <div class="s-grid">
       <section class="s-card">
@@ -205,12 +227,23 @@
     const $ = (id) => document.getElementById(id);
     function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
     function pct(x) { return (Number(x) * 100).toFixed(2) + "%"; }
+    function signedPct(x) { const n = Number(x) * 100; return (n >= 0 ? "+" : "") + n.toFixed(2) + "%"; }
     function profileLabel(k) { return k === "conservative" ? "Conservador" : k === "aggressive" ? "Agressivo" : "Balanceado"; }
+    function verdictFromPick(p) {
+      const roi = Number(p.expected_roi || 0);
+      const prob = Number(p.model_prob || 0);
+      if (roi > 0.02 && prob >= 0.6) return { label: "Boa oportunidade", cls: "good" };
+      if (roi >= 0 && prob >= 0.54) return { label: "Pode valer", cls: "warn" };
+      return { label: "Evitar", cls: "bad" };
+    }
 
     function rowHtml(p, idx) {
       const riskClass = (p.risk_tier || "").toLowerCase() === "safe" ? "safe" : "risky";
       const side = p.side === "red" ? "Vermelho" : "Azul";
       const modelP = Math.max(0, Math.min(100, Number(p.model_prob || 0) * 100));
+      const roi = Number(p.expected_roi || 0);
+      const edge = Number(p.edge_prob || 0);
+      const verdict = verdictFromPick(p);
       const rp = p.red_photo_url ? `/api/proxy-image?url=${encodeURIComponent(p.red_photo_url)}` : "";
       const bp = p.blue_photo_url ? `/api/proxy-image?url=${encodeURIComponent(p.blue_photo_url)}` : "";
       const winline =
@@ -224,6 +257,7 @@
           <div class="s-badges">
             <span class="s-pill side">${esc(side)}</span>
             <span class="s-pill ${riskClass}">${esc(p.risk_tier)}</span>
+            <span class="s-pill ${esc(verdict.cls)}">${esc(verdict.label)}</span>
             ${p.is_value_side ? '<span class="s-pill value">Value</span>' : ""}
           </div>
         </div>
@@ -240,12 +274,11 @@
         </div>
         <div class="s-kpis">
           <div class="s-kpi-chip">Odd <strong>${esc(p.decimal_odds)}</strong></div>
-          <div class="s-kpi-chip">ROI esp. <strong>${esc(pct(p.expected_roi))}</strong></div>
-          <div class="s-kpi-chip">Retorno bruto <strong>${esc(pct(p.gross_upside))}</strong></div>
-          <div class="s-kpi-chip">Edge <strong>${esc(pct(p.edge_prob))}</strong></div>
-          <div class="s-kpi-chip">Modelo <strong>${esc(pct(p.model_prob))}</strong></div>
-          ${p.mc_prob != null ? `<div class="s-kpi-chip">MC <strong>${esc(pct(p.mc_prob))}</strong></div>` : ""}
-          ${p.phase7_stake != null ? `<div class="s-kpi-chip">Stake F7 <strong>${esc(p.phase7_stake)}</strong></div>` : ""}
+          <div class="s-kpi-chip">Lucro esperado <strong class="${roi >= 0 ? "pos" : "neg"}">${esc(signedPct(roi))}</strong></div>
+          <div class="s-kpi-chip">Chance do modelo <strong>${esc(pct(p.model_prob))}</strong></div>
+          <div class="s-kpi-chip">Vantagem sobre odd <strong class="${edge >= 0 ? "pos" : "neg"}">${esc(signedPct(edge))}</strong></div>
+          ${p.mc_prob != null ? `<div class="s-kpi-chip">Confianca MC <strong>${esc(pct(p.mc_prob))}</strong></div>` : ""}
+          ${p.phase7_stake != null ? `<div class="s-kpi-chip">Stake sugerido <strong>${esc(p.phase7_stake)}</strong></div>` : ""}
         </div>
         <div class="s-bar-wrap">
           <div class="s-bar-head"><span>Convicção do modelo</span><span>${modelP.toFixed(2)}%</span></div>
@@ -341,7 +374,7 @@
         if (!data.ok) throw new Error((data.errors && data.errors[0]) || "Falha na análise");
 
         const pf = profileLabel(data.profile || profile);
-        st.innerHTML = `<strong>${esc(data.event_title || "Evento")}</strong> · perfil ${esc(pf)} · ${esc(data.total_candidates)} candidatas.`;
+        st.innerHTML = `<strong>${esc(data.event_title || "Evento")}</strong> · perfil ${esc(pf)} · ${esc(data.total_candidates)} opcoes encontradas.`;
         renderHero(data);
         renderList(top, data.top_picks, "Nenhuma pick recomendada nos filtros atuais.");
         renderList(risky, data.risky_value_picks, "Sem arriscadas que batam o critério neste momento.");
