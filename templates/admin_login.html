@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>UFC Analytics</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}" />
+</head>
+<body class="admin admin-login">
+  <header class="admin-header">
+    <span class="admin-header-brand">UFC Analytics</span>
+    <span class="admin-header-sub">Acesso interno</span>
+  </header>
+  <main class="admin-login-wrap">
+    <div class="admin-card admin-login-card">
+      <h1 class="admin-h1">Entrar</h1>
+      <p class="admin-lead">Conta autorizada. Valores em <strong>créditos</strong> fictícios (demo).</p>
+      {% if error %}
+      <p class="admin-alert admin-alert--error" role="alert">{{ error }}</p>
+      {% endif %}
+      <form method="post" action="{{ url_for('admin_panel.admin_login_post') }}" class="admin-form">
+        <label class="admin-label">Email
+          <input type="email" name="email" class="admin-input" required autocomplete="username" />
+        </label>
+        <label class="admin-label">Senha
+          <input type="password" name="password" class="admin-input" required autocomplete="current-password" />
+        </label>
+        <button type="submit" class="admin-btn admin-btn--primary">Entrar</button>
+      </form>
+      <p class="admin-foot"><a href="/">← Voltar ao site</a></p>
+    </div>
+  </main>
+</body>
+</html>

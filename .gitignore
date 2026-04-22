@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# Flask / local
+instance/
+.webassets-cache
+
+# Cache de HTML do scraper
+.ufc_html_cache/
+
+# Aprendizagem online MMA (SQLite + relatório local)
+data/mma_learning/
+
+# Saídas geradas (opcional: comente se quiser versionar)
+ufc_previsoes.txt
+ufc_enriquecimento_externo.txt
+ufc_relatorio_completo.txt
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini
+
+# Debug
+_debug_event.html
+
+# Ambiente / segredos locais
+.env
+.env.*
+!.env.example
+
+# Testes / ferramentas
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Bancos SQLite soltos na raiz (instance/ já ignorada acima)
+/*.sqlite3
+
+# Vercel: gerado em build (scripts/vercel_prepare.py)
+public/static/
+.vercel

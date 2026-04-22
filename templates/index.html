@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UFC Analytics — Análise &amp; apostas demo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
+  <script src="{{ url_for('static', filename='main.js') }}" defer></script>
+</head>
+<body class="app-shell" data-default-event-url="{{ default_url | e }}">
+  <aside class="sidebar" aria-label="Navegação">
+    <div class="sidebar-brand">
+      <span class="sidebar-logo" aria-hidden="true">◇</span>
+      <div>
+        <div class="sidebar-title">UFC Analytics</div>
+        <div class="sidebar-sub">Análise de lutas · apostas simuladas</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav sidebar-nav--single">
+      <div class="sidebar-link is-active" id="navUfcOnly" role="button" tabindex="0" data-tip="Eventos UFC" aria-label="Eventos UFC">
+        <span class="sidebar-ico" aria-hidden="true">🥊</span>
+        <span>Eventos UFC</span>
+      </div>
+      <div class="sidebar-link" id="navResults" role="button" tabindex="0" data-tip="Resultados" aria-label="Resultados vs análise">
+        <span class="sidebar-ico" aria-hidden="true">✓</span>
+        <span>Resultados</span>
+      </div>
+    </nav>
+  </aside>
+
+  <div class="main-wrap">
+    <header class="global-topbar">
+      <button type="button" class="topbar-menu" id="sidebarToggle" aria-label="Abrir/fechar menu">☰</button>
+      <a href="/" class="topbar-brand">UFC Analytics</a>
+      <nav class="topbar-nav">
+        <a href="/login" id="topbarLogin">Entrar</a>
+        <a href="/register" id="topbarReg">Cadastro</a>
+        <a href="/bets">Apostas</a>
+      </nav>
+      <div class="topbar-end">
+        <div class="topbar-user" id="topbarHi" hidden>
+          <span class="topbar-email" id="topbarEmail"></span>
+          <span class="topbar-bal" id="topbarBalance"></span>
+          <button type="button" class="btn-topbar-out" id="topbarLogout">Sair</button>
+        </div>
+      </div>
+      <p class="topbar-auth-msg" id="authMsg" role="status" hidden></p>
+    </header>
+
+    <header class="top-hero" id="topHero">
+      <section class="hero-event-visual hero-event-visual--empty" id="heroEventVisual" tabindex="0" aria-roledescription="carrossel de eventos">
+        <button type="button" class="hero-carousel-btn hero-carousel-btn--prev" id="heroCarouselPrev" aria-label="Evento anterior">‹</button>
+        <button type="button" class="hero-carousel-btn hero-carousel-btn--next" id="heroCarouselNext" aria-label="Próximo evento">›</button>
+        <button type="button" class="hero-carousel-refresh" id="btnRefreshEvents" title="Atualizar lista de eventos" aria-label="Atualizar lista de eventos">↻</button>
+        <div class="hero-event-visual__bg" id="heroEventBg" aria-hidden="true"></div>
+        <div class="hero-event-visual__inner">
+          <h1 class="hero-event-title" id="heroEventTitle" hidden></h1>
+          <div class="hero-event-visual__fighters" id="heroFightersRow"></div>
+          <p class="hero-event-visual__meta" id="heroEventMeta">Carregando imagem do evento…</p>
+          <p class="hero-carousel-hint" id="eventsLoadHint" role="status">Carregando eventos…</p>
+          <button type="button" class="btn-hero-cta" id="btnHeroLoad">Ver card completo</button>
+        </div>
+      </section>
+      <!-- usado só por ?refresh=1 na URL -->
+      <input type="checkbox" id="refresh" hidden />
+    </header>
+
+    <main id="main" class="content-main">
+      <div id="loadingOverlay" class="loading-overlay" hidden aria-busy="true">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <p class="loading-text">Analisando evento…</p>
+      </div>
+      <div id="blockUfcMain">
+        <section class="dash-cards" aria-label="Resumo">
+          <article class="dash-card">
+            <div class="dash-card__k">Próximo evento</div>
+            <div class="dash-card__v" id="dashNextEvent">—</div>
+            <div class="dash-card__s" id="dashNextWhen"></div>
+            <div class="dash-card__actions">
+              <a class="dash-btn dash-btn--ghost" id="dashNextOpen" href="#" target="_blank" rel="noopener" aria-disabled="true">Abrir</a>
+              <button type="button" class="dash-btn dash-btn--ghost" id="dashNextRefresh">Atualizar</button>
+            </div>
+          </article>
+          <article class="dash-card">
+            <div class="dash-card__k">Análise</div>
+            <div class="dash-card__v">
+              <span id="dashAnalyzeStatus">Aguardando…</span>
+              <span class="dash-badge dash-badge--muted" id="dashAnalyzeBadge">—</span>
+            </div>
+            <div class="dash-card__s" id="dashFightsCount"></div>
+          </article>
+          <article class="dash-card">
+            <div class="dash-card__k">Conta</div>
+            <div class="dash-card__v" id="dashAuth">Visitante</div>
+            <div class="dash-card__s" id="dashBalance"></div>
+          </article>
+          <article class="dash-card dash-card--accent">
+            <div class="dash-card__k">Canal ao vivo</div>
+            <div class="dash-card__v">
+              <span id="dashStream">—</span>
+              <span class="dash-badge dash-badge--muted" id="dashStreamBadge">—</span>
+            </div>
+            <div class="dash-card__s" id="dashStreamStatus"></div>
+          </article>
+        </section>
+
+        <section class="stream-card" aria-label="Canal ao vivo (admin)">
+          <header class="stream-card__head">
+            <div class="stream-card__title">Canal ao vivo</div>
+            <div class="stream-card__meta" id="mainStreamNow">Não configurado.</div>
+          </header>
+          <p class="stream-card__status" id="mainStreamStatus" role="status" aria-live="polite"></p>
+          <div class="stream-card__video">
+            <video id="mainStreamVideo" controls playsinline></video>
+          </div>
+        </section>
+        <p class="status" id="status"></p>
+        <div id="content" class="fight-list" hidden></div>
+        <div id="parlayRoot" class="parlay-root" hidden></div>
+      </div>
+
+      <div id="blockResultsMain" hidden>
+        <section class="results-panel" aria-label="Verificação de resultados">
+          <header class="results-panel__head">
+            <p class="results-panel__eyebrow">Pós-evento</p>
+            <h2 class="results-panel__title">Resultados vs análise</h2>
+            <p class="results-panel__intro">
+              Lê o que o site da UFC já mostra no card (vencedor, método, round) e compara com a
+              <strong>última análise carregada neste navegador</strong> na aba «Eventos UFC».
+            </p>
+          </header>
+          <div class="results-toolbar-card">
+            <label class="results-check">
+              <input type="checkbox" id="resultsForceRefresh" class="results-check__input" />
+              <span class="results-check__box" aria-hidden="true"></span>
+              <span class="results-check__text">Ignorar cache</span>
+            </label>
+            <button type="button" class="results-btn-load" id="btnLoadEventResults">
+              <span class="results-btn-load__ico" aria-hidden="true">↻</span>
+              Carregar resultados do evento atual
+            </button>
+          </div>
+          <p class="results-fetch-note" id="resultsFetchNote" role="note" hidden></p>
+          <p class="results-hint" id="resultsSnapshotHint" role="status"></p>
+          <p class="results-card-title" id="resultsLoadStatus" role="status"></p>
+          <div class="results-summary" id="resultsSummary" hidden></div>
+          <div class="results-table-wrap" id="resultsTableWrap" hidden>
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Luta</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Oficial</th>
+                  <th scope="col">Previsão</th>
+                  <th scope="col">Vencedor</th>
+                  <th scope="col">Método</th>
+                </tr>
+              </thead>
+              <tbody id="resultsTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+
+  </div>
+
+  <div class="app-modal-overlay" id="fightModal" hidden>
+    <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="fightModalTitle">
+      <div class="app-modal__head">
+        <div class="app-modal__title" id="fightModalTitle">Detalhes da luta</div>
+        <button type="button" class="app-modal__close" id="fightModalClose" aria-label="Fechar">×</button>
+      </div>
+      <div class="app-modal__body" id="fightModalBody"></div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    let lastUfcEventUrl = "";
+    let userBalance = 0;
+    let userBlocked = false;
+    let loadUfcSeq = 0;
+    let analyzeAbort = null;
+    let loadUfcOverlayGuard = null;
+    /** Lista para navegação no carrossel (futuros ordenados). */
+    let carouselEvents = [];
+    let carouselIndex = 0;
+
+    async function fetchJsonUrl(url) {
+      const res = await fetch(url, {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      });
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      const text = await res.text();
+      if (!ct.includes("application/json")) {
+        const hint = text.replace(/\s+/g, " ").trim().slice(0, 120);
+        throw new Error(
+          "O servidor não devolveu JSON. Inicie o app com «python app.py» e abra http://127.0.0.1:5000. " +
+            (hint ? "Trecho: " + hint : "")
+        );
+      }
+      return JSON.parse(text);
+    }
+
+    function esc(s) {
+      if (s == null) return "";
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    // ---- Navegação: Eventos + Resultados ----
+    let currentTab = "ufc";
+    const PRED_SNAP_KEY = "ufc_prediction_snapshot_v1";
+
+    function setTab(tab) {
+      const t = tab === "results" ? "results" : "ufc";
+      currentTab = t;
+      const navU = $("navUfcOnly");
+      const navR = $("navResults");
+      const blkU = $("blockUfcMain");
+      const blkR = $("blockResultsMain");
+      const hero = $("topHero");
+      if (navU) navU.classList.toggle("is-active", t === "ufc");
+      if (navR) navR.classList.toggle("is-active", t === "results");
+      if (blkU) blkU.hidden = t !== "ufc";
+      if (blkR) blkR.hidden = t !== "results";
+      if (hero) hero.hidden = false;
+      if (t === "results") updateResultsSnapshotHint();
+    }
+
+    function savePredictionSnapshot(data) {
+      if (!data || !data.ok || !Array.isArray(data.fights)) return;
+      try {
+        const snap = {
+          event_url: data.event_url || "",
+          event_title: data.event_title || "",
+          saved_at: new Date().toISOString(),
+          fights: data.fights.map((f, idx) => ({
+            index: idx + 1,
+            red_name: f.red && f.red.name,
+            blue_name: f.blue && f.blue.name,
+            predicted_winner: f.predicted_winner,
+            predicted_method: f.predicted_method,
+          })),
+        };
+        localStorage.setItem(PRED_SNAP_KEY, JSON.stringify(snap));
+      } catch (_) {}
+    }
+
+    function loadPredictionSnapshot() {
+      try {
+        const raw = localStorage.getItem(PRED_SNAP_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function normNameStr(s) {
+      if (s == null) return "";
+      return String(s)
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function namesRoughMatch(a, b) {
+      const na = normNameStr(a);
+      const nb = normNameStr(b);
+      if (!na || !nb) return false;
+      if (na === nb) return true;
+      if (na.includes(nb) || nb.includes(na)) return true;
+      const la = na.split(" ");
+      const lb = nb.split(" ");
+      const sa = la[la.length - 1] || "";
+      const sb = lb[lb.length - 1] || "";
+      return sa.length > 2 && sb.length > 2 && sa === sb;
+    }
+
+    function predictedMethodBucket(meth) {
+      if (meth == null || !String(meth).trim()) return null;
+      const t = String(meth).trim().toLowerCase();
+      if (t.includes("ko") || t.includes("tko")) return "ko_tko";
+      if (t.includes("decis")) return "decisao";
+      if (t.includes("final")) return "finalizacao";
+      return null;
+    }
+
+    function updateResultsSnapshotHint() {
+      const el = $("resultsSnapshotHint");
+      if (!el) return;
+      const snap = loadPredictionSnapshot();
+      const cur = getAnalyzeUrl();
+      if (!snap || !snap.saved_at) {
+        el.textContent = "Nenhuma análise salva ainda. Abra «Eventos UFC» e carregue o card para guardarmos as previsões neste navegador.";
+        return;
+      }
+      const same = snap.event_url && cur && snap.event_url === cur;
+      el.innerHTML = same
+        ? `Comparando com análise salva em ${esc(new Date(snap.saved_at).toLocaleString("pt-BR"))}.`
+        : `Análise salva é de <strong>outro evento</strong> (${esc(snap.event_title || snap.event_url || "?")}). Selecione o mesmo evento no carrossel ou a comparação de vencedor/método ficará vazia.`;
+    }
+
+    function renderEventResultsTable(apiData) {
+      const body = $("resultsTableBody");
+      const wrap = $("resultsTableWrap");
+      const sumEl = $("resultsSummary");
+      if (!body || !wrap) return;
+      const fights = Array.isArray(apiData.fights) ? apiData.fights : [];
+      const snap = loadPredictionSnapshot();
+      const curUrl = getAnalyzeUrl();
+      const snapOk = snap && snap.event_url && curUrl && snap.event_url === curUrl;
+      const predByIndex = {};
+      if (snapOk && Array.isArray(snap.fights)) {
+        snap.fights.forEach((p) => {
+          predByIndex[p.index] = p;
+        });
+      }
+
+      let winOk = 0;
+      let winTot = 0;
+      let methOk = 0;
+      let methTot = 0;
+
+      body.innerHTML = fights
+        .map((f) => {
+          const pred = predByIndex[f.index];
+          const fromPress =
+            f.result_source === "external_press" || f.external_inferred === true;
+          const official =
+            f.status === "completed" && f.winner_name
+              ? `${f.winner_name}${f.method_text ? " — " + f.method_text : ""}${f.round ? " · R" + f.round : ""}${fromPress ? " [imprensa]" : ""}`
+              : f.status === "scheduled"
+                ? "Sem resultado publicado ainda"
+                : f.status === "draw"
+                  ? "Empate" + (f.method_text ? " — " + f.method_text : "")
+                  : f.status === "no_contest"
+                    ? "NC / sem resultado" + (f.method_text ? " — " + f.method_text : "")
+                    : "—";
+          const predLine =
+            pred && (pred.predicted_winner || pred.predicted_method)
+              ? `${esc(pred.predicted_winner || "—")} · ${esc(pred.predicted_method || "—")}`
+              : snapOk
+                ? "—"
+                : "—";
+
+          let winCell = "—";
+          let methCell = "—";
+          if (f.status === "completed" && f.winner_name && pred && pred.predicted_winner) {
+            winTot += 1;
+            const hit = namesRoughMatch(pred.predicted_winner, f.winner_name);
+            if (hit) winOk += 1;
+            winCell = hit
+              ? '<span class="result-pill result-pill--hit">Acertou</span>'
+              : '<span class="result-pill result-pill--miss">Errou</span>';
+          } else if (f.status === "completed" && pred && pred.predicted_winner) {
+            winCell = '<span class="result-pill result-pill--na">n/d</span>';
+          }
+
+          const pb = predictedMethodBucket(pred && pred.predicted_method);
+          const ab = f.method_bucket;
+          if (f.status === "completed" && pb && ab && ab !== "outro" && ab !== "empate") {
+            methTot += 1;
+            const mh = pb === ab;
+            if (mh) methOk += 1;
+            methCell = mh
+              ? '<span class="result-pill result-pill--hit">Acertou</span>'
+              : '<span class="result-pill result-pill--miss">Errou</span>';
+          } else if (f.status === "completed" && pred && pred.predicted_method) {
+            methCell = '<span class="result-pill result-pill--na">n/d</span>';
+          }
+
+          const stLabel =
+            f.status === "completed"
+              ? "Concluída"
+              : f.status === "scheduled"
+                ? "Agendada"
+                : f.status === "draw"
+                  ? "Empate"
+                  : f.status === "no_contest"
+                    ? "NC / anulada"
+                    : f.status;
+          const stClass =
+            f.status === "completed"
+              ? "completed"
+              : f.status === "scheduled"
+                ? "scheduled"
+                : f.status === "draw"
+                  ? "draw"
+                  : f.status === "no_contest"
+                    ? "nc"
+                    : "other";
+          return `<tr class="results-row results-row--${stClass}">
+            <td data-label="#">${f.index}</td>
+            <td data-label="Luta" class="results-td-match">${esc(f.red_name)} <span class="results-vs">×</span> ${esc(f.blue_name)}<div class="results-sub">${esc(f.division || "")}</div></td>
+            <td data-label="Status"><span class="results-status-pill results-status-pill--${stClass}">${esc(stLabel)}</span></td>
+            <td data-label="Oficial" class="results-td-official ${f.status === "scheduled" ? "results-td-official--muted" : ""}">${esc(official)}</td>
+            <td data-label="Previsão" class="results-td-pred">${predLine}</td>
+            <td data-label="Vencedor">${winCell}</td>
+            <td data-label="Método">${methCell}</td>
+          </tr>`;
+        })
+        .join("");
+
+      wrap.hidden = fights.length === 0;
+      if (sumEl) {
+        if (fights.length === 0) {
+          sumEl.hidden = true;
+          sumEl.textContent = "";
+        } else {
+          sumEl.hidden = false;
+          const done = fights.filter((x) => x.status === "completed").length;
+          const winDisp = winTot > 0 ? `${winOk}/${winTot}` : "—";
+          const methDisp = methTot > 0 ? `${methOk}/${methTot}` : "—";
+          const winSub = winTot > 0 ? "vs sua análise" : "sem lutas comparáveis";
+          const methSub = methTot > 0 ? "categoria de método" : "aguardando ou n/d";
+          sumEl.innerHTML = `
+            <div class="results-stats-grid" role="group" aria-label="Resumo do card">
+              <div class="results-stat">
+                <span class="results-stat__value">${fights.length}</span>
+                <span class="results-stat__label">Lutas no card</span>
+              </div>
+              <div class="results-stat results-stat--accent">
+                <span class="results-stat__value">${done}</span>
+                <span class="results-stat__label">Concluídas (site ou imprensa)</span>
+              </div>
+              <div class="results-stat">
+                <span class="results-stat__value">${esc(winDisp)}</span>
+                <span class="results-stat__label">Acerto vencedor</span>
+                <span class="results-stat__hint">${esc(winSub)}</span>
+              </div>
+              <div class="results-stat">
+                <span class="results-stat__value">${esc(methDisp)}</span>
+                <span class="results-stat__label">Acerto método</span>
+                <span class="results-stat__hint">${esc(methSub)}</span>
+              </div>
+            </div>`;
+        }
+      }
+    }
+
+    async function loadEventResults() {
+      const url = getAnalyzeUrl();
+      const st = $("resultsLoadStatus");
+      const refreshEl = $("resultsForceRefresh");
+      const refresh = refreshEl && refreshEl.checked ? "1" : "0";
+      if (!url) {
+        if (st) {
+          st.className = "results-load-msg results-load-msg--warn";
+          st.textContent = "Selecione um evento no carrossel.";
+        }
+        return;
+      }
+      if (st) {
+        st.className = "results-load-msg";
+        st.textContent = "Buscando resultados no site da UFC…";
+      }
+      try {
+        const data = await fetchJsonUrl(
+          "/api/ufc/event-results?url=" + encodeURIComponent(url) + "&refresh=" + refresh + "&external=1"
+        );
+        if (!data.ok) {
+          if (st) {
+            st.className = "results-load-msg results-load-msg--error";
+            st.textContent = (data.errors && data.errors[0]) || "Falha ao carregar.";
+          }
+          return;
+        }
+        if (st) {
+          st.className = "results-card-title";
+          if (data.event_title) {
+            st.innerHTML = `<span class="results-card-title__label">Card carregado</span><span class="results-card-title__name">${esc(data.event_title)}</span>`;
+          } else {
+            st.textContent = "Resultados carregados.";
+          }
+        }
+        const fetchNoteEl = $("resultsFetchNote");
+        if (fetchNoteEl) {
+          if (data.results_note) {
+            fetchNoteEl.textContent = data.results_note;
+            fetchNoteEl.hidden = false;
+          } else {
+            fetchNoteEl.textContent = "";
+            fetchNoteEl.hidden = true;
+          }
+        }
+        renderEventResultsTable(data);
+        updateResultsSnapshotHint();
+      } catch (e) {
+        if (st) {
+          st.className = "results-load-msg results-load-msg--error";
+          st.textContent = e.message || "Erro de rede.";
+        }
+      }
+    }
+
+    function bindNavClick(id, tab) {
+      const el = $(id);
+      if (!el) return;
+      const go = () => setTab(tab);
+      el.addEventListener("click", go);
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          go();
+        }
+      });
+    }
+
+    async function postJson(path, body) {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(body || {}),
+      });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (_) {
+        throw new Error("Resposta não é JSON");
+      }
+      return { res, data };
+    }
+
+    /**
+     * fetch com timeout; se init.signal existir, abort externo também cancela a requisição.
+     */
+    function fetchWithTimeout(url, init, timeoutMs) {
+      const timeoutCtrl = new AbortController();
+      const t = setTimeout(() => timeoutCtrl.abort(), timeoutMs);
+      const userSig = init && init.signal;
+      const merged = { ...init, signal: timeoutCtrl.signal };
+      if (userSig) {
+        if (userSig.aborted) {
+          clearTimeout(t);
+          return Promise.reject(new DOMException("Aborted", "AbortError"));
+        }
+        userSig.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(t);
+            timeoutCtrl.abort();
+          },
+          { once: true }
+        );
+      }
+      return fetch(url, merged).finally(() => clearTimeout(t));
+    }
+
+    /**
+     * Lê corpo JSON mesmo com status HTTP de erro; se vier HTML (proxy, Flask em debug, 502 nginx), mensagem clara.
+     */
+    async function readJsonOrThrow(res) {
+      const text = await res.text();
+      const t = text.trimStart();
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      const looksJson = t.startsWith("{") || t.startsWith("[");
+      if (!ct.includes("application/json") && !looksJson) {
+        const hint = text.replace(/\s+/g, " ").trim().slice(0, 180);
+        throw new Error(
+          "O servidor devolveu HTML em vez de JSON (HTTP " +
+            res.status +
+            "). Abra o site pela mesma origem da API (ex.: http://127.0.0.1:5000) e confira o terminal onde corre «python app.py». " +
+            (hint ? "Trecho: " + hint : "")
+        );
+      }
+      try {
+        return JSON.parse(text);
+      } catch (err) {
+        throw new Error("JSON inválido (HTTP " + res.status + "): " + (err && err.message));
+      }
+    }
+
+    function probsFromFight(f) {
+      const ap = f.advanced_prediction;
+      const wm = ap && ap.weighted_model;
+      let pr;
+      let pb;
+      if (wm && wm.prob_red_pct != null) {
+        pr = Number(wm.prob_red_pct) / 100;
+        pb = Number(wm.prob_blue_pct != null ? wm.prob_blue_pct : 100 - wm.prob_red_pct) / 100;
+      } else {
+        pr = Number(f.prob_red_pct != null ? f.prob_red_pct : 50) / 100;
+        pb = Number(f.prob_blue_pct != null ? f.prob_blue_pct : 50) / 100;
+      }
+      const s = pr + pb;
+      if (s > 0) {
+        pr /= s;
+        pb /= s;
+      }
+      return { pr, pb };
+    }
+
+    function vigForRisk(tier) {
+      if (tier === "SKIP") return null;
+      if (tier === "RISKY") return 1.12;
+      return 1.08;
+    }
+
+    function decimalOddsFairVig(p, vig) {
+      const p2 = Math.max(0.04, Math.min(0.96, p));
+      const fair = 1 / p2;
+      const d = fair / vig;
+      return Math.min(50, Math.max(1.01, Math.round(d * 100) / 100));
+    }
+
+    function bettingPanel(f, fightIndex, eventUrl) {
+      if (!eventUrl || f.error) return "";
+      const { pr, pb } = probsFromFight(f);
+      const ap = f.advanced_prediction;
+      const risk = ap && ap.risk;
+      const tier = risk && risk.tier;
+      const riskCls =
+        tier === "SAFE"
+          ? "bet-risk--safe"
+          : tier === "RISKY"
+            ? "bet-risk--risky"
+            : tier === "SKIP"
+              ? "bet-risk--skip"
+              : "";
+      const vig = vigForRisk(tier);
+      const redName = esc((f.red && f.red.name) || "Vermelho");
+      const blueName = esc((f.blue && f.blue.name) || "Azul");
+      if (vig == null) {
+        return `
+        <div class="bet-sportsbook bet-sportsbook--skip" data-fight-index="${fightIndex}">
+          <div class="bet-sb-head">
+            <span class="bet-sb-title">Apostas</span>
+            <span class="bet-risk-tag bet-risk--skip">SKIP</span>
+          </div>
+          <p class="bet-sb-skip-msg">Mercado fechado — sem confiança suficiente no modelo.</p>
+        </div>`;
+      }
+      const orR = decimalOddsFairVig(pr, vig);
+      const orB = decimalOddsFairVig(pb, vig);
+      const maxStake = Math.max(0, Math.floor((userBalance || 0) * 0.2));
+      const defStake = maxStake > 0 ? Math.min(10, maxStake) : 1;
+      const broke = !userBalance || userBalance < 1;
+      const dis = broke || userBlocked ? " disabled" : "";
+      return `
+        <div class="bet-sportsbook" data-fight-index="${fightIndex}" data-odds-red="${orR}" data-odds-blue="${orB}">
+          <div class="bet-sb-head">
+            <span class="bet-sb-title">Apostas</span>
+            <span class="bet-sb-meta">Vig ${vig === 1.12 ? "1.12" : "1.08"}</span>
+            <span class="bet-risk-tag ${riskCls}">${esc(String(tier))}</span>
+          </div>
+          <div class="bet-sb-matchup">
+            <div class="bet-sb-fighter bet-sb-fighter--red">${redName}</div>
+            <div class="bet-sb-vs">×</div>
+            <div class="bet-sb-fighter bet-sb-fighter--blue">${blueName}</div>
+          </div>
+          <div class="bet-sb-probs">
+            <span>${esc((pr * 100).toFixed(1))}%</span>
+            <span>${esc((pb * 100).toFixed(1))}%</span>
+          </div>
+          <div class="bet-sb-actions">
+            <button type="button" class="bet-sb-btn bet-sb-btn--red" data-side="red"${dis}>
+              <span class="bet-sb-btn-odd">${esc(String(orR))}</span>
+              <span class="bet-sb-btn-lbl">Vermelho</span>
+            </button>
+            <button type="button" class="bet-sb-btn bet-sb-btn--blue" data-side="blue"${dis}>
+              <span class="bet-sb-btn-odd">${esc(String(orB))}</span>
+              <span class="bet-sb-btn-lbl">Azul</span>
+            </button>
+          </div>
+          ${userBlocked ? '<p class="bet-sb-broke">Conta bloqueada — não é possível apostar.</p>' : ""}
+          ${!userBlocked && broke ? '<p class="bet-sb-broke">Saldo insuficiente — faça login para receber créditos demo.</p>' : ""}
+          <div class="bet-sb-stake-row">
+            <label class="bet-sb-stake-lbl">Stake
+              <input type="number" class="bet-stake-input bet-stake-input--wide" min="1" max="${maxStake || 1}" value="${defStake}" step="1"${dis} />
+            </label>
+            <p class="bet-sb-return" aria-live="polite"></p>
+            ${maxStake > 0 ? `<p class="bet-limit-hint">Até ${maxStake} créditos (máx. 20% do saldo)</p>` : ""}
+          </div>
+          <p class="bet-msg" aria-live="polite"></p>
+        </div>`;
+    }
+
+    const COMP_TIP = {
+      striking_diff: "Striking: diferença agregada (vermelho − azul).",
+      grappling_diff: "Grappling: diferença agregada.",
+      recent_form_diff: "Forma: momentum dos últimos combates.",
+      physical_rank_diff: "Físico / posição no card.",
+      consistency_diff: "Consistência entre combates.",
+    };
+
+    function advancedPredictionBlock(ap, fight) {
+      if (!ap) return "";
+      if (ap.ok === false && ap.error) {
+        return `<div class="mma-advanced-error">Modelo avançado: ${esc(ap.error)}</div>`;
+      }
+      const wm = ap.weighted_model;
+      const risk = ap.risk || {};
+      if (!wm) return "";
+      const tier = risk.tier || "—";
+      const riskCls =
+        tier === "SAFE" ? "mma-risk--safe" : tier === "RISKY" ? "mma-risk--risky" : "mma-risk--skip";
+      const legacyR = Number(fight.prob_red_pct != null ? fight.prob_red_pct : 50);
+      const legacyB = Number(fight.prob_blue_pct != null ? fight.prob_blue_pct : 50);
+      const wR = Number(wm.prob_red_pct);
+      const wB = Number(wm.prob_blue_pct);
+      const dRed = (wR - legacyR).toFixed(1);
+      const dBlue = (wB - legacyB).toFixed(1);
+      const reasons =
+        (risk.reasons || []).length > 0
+          ? `<div class="round-hint">${esc(risk.reasons.join(" · "))}</div>`
+          : "";
+      const comps = wm.components || {};
+      const compBars = Object.keys(comps)
+        .map((k) => {
+          const v = Number(comps[k]);
+          const width = Math.max(8, Math.min(92, 50 + v * 35));
+          const tip = COMP_TIP[k] || k;
+          const label = k.replace(/_diff$/, "").replace(/_/g, " ");
+          return `<div class="mma-comp-row" title="${esc(tip)}">
+            <span class="mma-comp-name">${esc(label)}</span>
+            <div class="mma-comp-bar" aria-hidden="true"><span class="mma-comp-fill" style="width:${width}%"></span></div>
+            <span class="mma-comp-val">${esc(String(comps[k]))}</span>
+          </div>`;
+        })
+        .join("");
+      const vb = ap.value_bet;
+      const valueHtml = vb
+        ? `<div class="mma-value-bet">Value: ${esc(vb.side)} · modelo ${esc(String(vb.model_pct))}% vs implícita ${esc(String(vb.implied_pct))}% (${esc(String(vb.edge_pct))}% edge)</div>`
+        : "";
+      const fav = ap.favorite_corner_weighted === "blue" ? "Azul" : "Vermelho";
+      return `
+        <div class="mma-advanced-block">
+          <div class="mma-advanced-head">
+            Modelo ponderado
+            <span class="mma-risk ${riskCls}">${esc(tier)}</span>
+            <span class="mma-conf-hint">conf. máx. ${esc(String(risk.max_confidence_pct ?? "—"))}%</span>
+          </div>
+          <div class="mma-legacy-vs">
+            <div class="mma-lvp-col">
+              <span class="mma-lvp-h">Legado</span>
+              <span>${esc(String(legacyR))}% / ${esc(String(legacyB))}%</span>
+            </div>
+            <div class="mma-lvp-col">
+              <span class="mma-lvp-h">Ponderado</span>
+              <span><strong>${esc(String(wR))}%</strong> / <strong>${esc(String(wB))}%</strong></span>
+            </div>
+            <div class="mma-lvp-delta" title="Diferença vs modelo legado (pontos percentuais)">Δ ${esc(dRed)} pp (V) · ${esc(dBlue)} pp (A)</div>
+          </div>
+          <div class="mma-wm-bar-wrap" title="Probabilidade ponderada por canto">
+            <div class="mma-wm-bar">
+              <div class="mma-wm-seg mma-wm-seg--red" style="flex:${wR}"></div>
+              <div class="mma-wm-seg mma-wm-seg--blue" style="flex:${wB}"></div>
+            </div>
+            <div class="mma-wm-bar-labels"><span>V ${esc(String(wR))}%</span><span>A ${esc(String(wB))}%</span></div>
+          </div>
+          <div class="mma-wm-edge">Favorito ponderado: ${esc(fav)} · edge score ${esc(String(wm.edge_score))}</div>
+          ${reasons}
+          <div class="mma-comp-bars">${compBars}</div>
+          ${valueHtml}
+        </div>`;
+    }
+
+    async function refreshAuthUI() {
+      const msg = $("authMsg");
+      try {
+        const res = await fetchWithTimeout(
+          "/api/auth/me",
+          {
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+          },
+          8000
+        );
+        const data = await res.json();
+        const tbHi = $("topbarHi");
+        const tl = $("topbarLogin");
+        const tr = $("topbarReg");
+        if (data.ok && data.authenticated && data.user) {
+          userBalance = Number(data.user.balance) || 0;
+          userBlocked = !!data.user.blocked;
+          if (tbHi) tbHi.hidden = false;
+          if ($("topbarEmail")) $("topbarEmail").textContent = data.user.email || "";
+          if ($("topbarBalance")) $("topbarBalance").textContent = userBalance + " créditos";
+          if (tl) tl.hidden = true;
+          if (tr) tr.hidden = true;
+          if ($("dashAuth")) $("dashAuth").textContent = data.user.email || "Logado";
+          if ($("dashBalance")) $("dashBalance").textContent = userBalance + " créditos";
+        } else {
+          userBalance = 0;
+          userBlocked = false;
+          if (tbHi) tbHi.hidden = true;
+          if (tl) tl.hidden = false;
+          if (tr) tr.hidden = false;
+          if ($("dashAuth")) $("dashAuth").textContent = "Visitante";
+          if ($("dashBalance")) $("dashBalance").textContent = "";
+        }
+        if (msg) {
+          msg.textContent = "";
+          msg.hidden = true;
+        }
+      } catch (e) {
+        if (msg) {
+          msg.textContent = e.message || "Erro ao verificar sessão.";
+          msg.hidden = false;
+        }
+      }
+    }
+    window.refreshAuthUI = refreshAuthUI;
+
+    // ---- IPTV (canal fixo na home) ----
+    let mainHls = null;
+
+    function setDashBadge(id, text, kind) {
+      const el = $(id);
+      if (!el) return;
+      el.textContent = text || "—";
+      el.classList.remove("dash-badge--muted", "dash-badge--ok", "dash-badge--warn", "dash-badge--bad");
+      if (kind === "ok") el.classList.add("dash-badge--ok");
+      else if (kind === "warn") el.classList.add("dash-badge--warn");
+      else if (kind === "bad") el.classList.add("dash-badge--bad");
+      else el.classList.add("dash-badge--muted");
+    }
+
+    function mainSetStatus(msg) {
+      const el = $("mainStreamStatus");
+      if (el) el.textContent = msg || "";
+      if ($("dashStreamStatus")) $("dashStreamStatus").textContent = msg || "";
+    }
+
+    function mainStop() {
+      const v = $("mainStreamVideo");
+      if (mainHls) {
+        try {
+          mainHls.destroy();
+        } catch (_) {}
+        mainHls = null;
+      }
+      if (v) {
+        try {
+          v.pause();
+        } catch (_) {}
+        v.removeAttribute("src");
+        try {
+          v.load();
+        } catch (_) {}
+      }
+    }
+
+    function mainPlay(url, name) {
+      const v = $("mainStreamVideo");
+      const now = $("mainStreamNow");
+      if (!v) return;
+      if (now) now.textContent = name ? `Canal ao vivo: ${name}` : "Canal ao vivo";
+      if ($("dashStream")) $("dashStream").textContent = name || "Canal configurado";
+      mainStop();
+
+      if (!/^https?:\/\//i.test(url)) {
+        mainSetStatus("Stream não é http(s) — não toca no navegador.");
+        setDashBadge("dashStreamBadge", "ERRO", "bad");
+        return;
+      }
+      const playUrl = "/api/iptv/stream?url=" + encodeURIComponent(url);
+
+      const canNativeHls = !!v.canPlayType && v.canPlayType("application/vnd.apple.mpegurl");
+      if (canNativeHls) {
+        v.src = playUrl;
+        v.play().catch(() => {});
+        setDashBadge("dashStreamBadge", "TOCANDO", "ok");
+        return;
+      }
+
+      if (window.Hls && window.Hls.isSupported()) {
+        mainHls = new window.Hls({ enableWorker: true, lowLatencyMode: true });
+        mainHls.loadSource(playUrl);
+        mainHls.attachMedia(v);
+        mainHls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+          v.play().catch(() => {});
+          setDashBadge("dashStreamBadge", "TOCANDO", "ok");
+        });
+        mainHls.on(window.Hls.Events.ERROR, (_, data) => {
+          if (data && data.fatal) {
+            const kind = data.type || "HLS";
+            const det = data.details || "erro fatal";
+            mainSetStatus(`Falha ao tocar (HLS): ${kind} — ${det}.`);
+            setDashBadge("dashStreamBadge", "ERRO", "bad");
+          }
+        });
+        return;
+      }
+
+      mainSetStatus("hls.js não carregou; tentando tocar via proxy direto.");
+      v.src = playUrl;
+      v.play().catch(() => {});
+      setDashBadge("dashStreamBadge", "FALLBACK", "warn");
+    }
+
+    async function resolveMainStreamUrl(url) {
+      const raw = String(url || "").trim();
+      if (!raw) return { url: "", hint: "", contentType: "" };
+      try {
+        const probe = await fetchJsonUrl("/api/iptv/probe?url=" + encodeURIComponent(raw));
+        if (!probe || !probe.ok) return { url: raw, hint: "", contentType: "" };
+        const finalUrl = String(probe.final_url || probe.fetched_url || raw).trim() || raw;
+        return {
+          url: finalUrl,
+          hint: String(probe.hint || "").trim(),
+          contentType: String(probe.content_type || "").trim().toLowerCase(),
+        };
+      } catch (_) {
+        return { url: raw, hint: "", contentType: "" };
+      }
+    }
+
+    async function loadMainStreamFromSettings() {
+      try {
+        const data = await fetchJsonUrl("/api/iptv/settings");
+        if (!data || !data.ok || !data.settings) return;
+        const s = data.settings;
+        if (!s.autoplay_enabled) return;
+        const url = String(s.selected_channel_url || "").trim();
+        const name = String(s.selected_channel_name || "").trim();
+        if (!url) return;
+        mainSetStatus("Iniciando canal configurado no admin…");
+        setDashBadge("dashStreamBadge", "INICIANDO", "warn");
+        const resolved = await resolveMainStreamUrl(url);
+        if (resolved.hint) {
+          mainSetStatus(`${resolved.hint} Verifique se o link aponta para .m3u8/.mpd ou arquivo de vídeo direto.`);
+        } else if (resolved.contentType && resolved.contentType.startsWith("text/")) {
+          mainSetStatus("A URL do canal respondeu como texto/página, não como stream de vídeo.");
+        }
+        mainPlay(resolved.url || url, name);
+      } catch (e) {
+        mainSetStatus((e && e.message) || "Falha ao iniciar canal.");
+        setDashBadge("dashStreamBadge", "ERRO", "bad");
+      }
+    }
+
+    function initials(name) {
+      if (!name) return "?";
+      const p = name.trim().split(/\s+/).filter(Boolean);
+      if (p.length >= 2) return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+      return name.slice(0, 2).toUpperCase();
+    }
+
+    function photoBlock(url, name) {
+      const ini = initials(name);
+      const raw = url && String(url).trim() ? String(url).trim() : "";
+      if (!raw) {
+        return `<div class="fighter-photo"><span class="fighter-fallback">${esc(ini)}</span></div>`;
+      }
+      const src = "/api/proxy-image?url=" + encodeURIComponent(raw);
+      return `<div class="fighter-photo">
+        <img src="${esc(src)}" alt="${esc(name)}" loading="lazy"
+          onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')" />
+        <span class="fighter-fallback hidden">${esc(ini)}</span>
+      </div>`;
+    }
+
+    /** Ex.: "UFC Fight Night | UFC" → "UFC Fight Night" */
+    function ufcEditionFromTitle(title) {
+      if (title == null || !String(title).trim()) return "";
+      const t = String(title).trim();
+      const parts = t.split(/\s*\|\s*/);
+      if (parts.length >= 2 && parts[0].trim()) return parts[0].trim();
+      return t;
+    }
+
+    /** Data e horário legíveis para o card principal (timezone do navegador). */
+    function formatFightDateTime(iso) {
+      if (!iso) return "";
+      try {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(iso);
+        return d.toLocaleString("pt-BR", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch (_) {
+        return String(iso);
+      }
+    }
+
+    function renderHeroFromMeta(data) {
+      const sec = $("heroEventVisual");
+      const bg = $("heroEventBg");
+      const row = $("heroFightersRow");
+      const metaEl = $("heroEventMeta");
+      const tit = $("heroEventTitle");
+      if (!sec) return;
+      sec.hidden = false;
+      const hero = data.hero_image_url;
+      if (bg) {
+        if (hero) {
+          bg.style.backgroundImage = "url(/api/proxy-image?url=" + encodeURIComponent(hero) + ")";
+          sec.classList.remove("hero-event-visual--empty");
+        } else {
+          bg.style.backgroundImage = "";
+          sec.classList.add("hero-event-visual--empty");
+        }
+      }
+      if (row) row.innerHTML = "";
+      if (tit) {
+        const t = data.event_title || "";
+        const edition = ufcEditionFromTitle(t) || t;
+        tit.textContent = edition;
+        tit.hidden = !edition;
+        if ($("dashNextEvent")) $("dashNextEvent").textContent = edition || "—";
+      }
+      if (metaEl) {
+        const when = formatFightDateTime(data.event_starts_at);
+        metaEl.textContent = when || "Horário ainda não disponível no site — veja o card abaixo.";
+        if ($("dashNextWhen")) $("dashNextWhen").textContent = when || "";
+      }
+    }
+
+    async function loadHeroMeta(url) {
+      const sec = $("heroEventVisual");
+      if (!sec) return;
+      if (!url) {
+        sec.classList.add("hero-event-visual--empty");
+        const bg = $("heroEventBg");
+        if (bg) bg.style.backgroundImage = "";
+        const tit = $("heroEventTitle");
+        if (tit) {
+          tit.textContent = "Evento UFC";
+          tit.hidden = false;
+        }
+        const row = $("heroFightersRow");
+        if (row) row.innerHTML = "";
+        const metaEl = $("heroEventMeta");
+        if (metaEl) metaEl.textContent = "";
+        return;
+      }
+      const metaEl = $("heroEventMeta");
+      if (metaEl) metaEl.textContent = "Carregando banner do site da UFC…";
+      const refresh = $("refresh") && $("refresh").checked ? "1" : "0";
+      try {
+        const data = await fetchJsonUrl(
+          "/api/ufc/event-meta?url=" + encodeURIComponent(url) + "&refresh=" + refresh
+        );
+        if (!data.ok) {
+          sec.classList.add("hero-event-visual--empty");
+          if (metaEl) metaEl.textContent = (data.errors && data.errors[0]) || "Banner indisponível.";
+          return;
+        }
+        renderHeroFromMeta(data);
+      } catch (e) {
+        sec.classList.add("hero-event-visual--empty");
+        if (metaEl) metaEl.textContent = e.message || "Erro ao carregar o banner.";
+      }
+    }
+
+    function renderHeroEvent(data) {
+      const sec = $("heroEventVisual");
+      const bg = $("heroEventBg");
+      const row = $("heroFightersRow");
+      const meta = $("heroEventMeta");
+      const tit = $("heroEventTitle");
+      if (!sec) return;
+      const hero = data.hero_image_url;
+      const mp = data.main_fight_preview;
+      if (bg) {
+        if (hero) {
+          bg.style.backgroundImage = "url(/api/proxy-image?url=" + encodeURIComponent(hero) + ")";
+        } else {
+          bg.style.backgroundImage = "";
+        }
+      }
+      if (tit) {
+        const t = data.event_title || "";
+        const edition = ufcEditionFromTitle(t) || t;
+        tit.textContent = edition;
+        tit.hidden = !edition;
+      }
+      if (row && mp && mp.red_name && mp.blue_name) {
+        const rSrc = mp.red_photo_url ? "/api/proxy-image?url=" + encodeURIComponent(mp.red_photo_url) : "";
+        const bSrc = mp.blue_photo_url ? "/api/proxy-image?url=" + encodeURIComponent(mp.blue_photo_url) : "";
+        row.innerHTML = `
+        <div class="hero-fighter hero-fighter--red">
+          ${rSrc ? `<img src="${esc(rSrc)}" alt="">` : ""}
+          <span class="hero-fighter-name">${esc(mp.red_name)}</span>
+        </div>
+        <div class="hero-vs">×</div>
+        <div class="hero-fighter hero-fighter--blue">
+          ${bSrc ? `<img src="${esc(bSrc)}" alt="">` : ""}
+          <span class="hero-fighter-name">${esc(mp.blue_name)}</span>
+        </div>`;
+      } else if (row) {
+        row.innerHTML = "";
+      }
+      if (meta) {
+        const when = formatFightDateTime(data.event_starts_at);
+        meta.textContent = when || "Horário ainda não disponível no site — veja detalhes no card.";
+      }
+      const show = !!(hero || (mp && mp.red_name));
+      sec.classList.toggle("hero-event-visual--empty", !show);
+      sec.hidden = false;
+    }
+
+    function hideHeroEvent() {
+      void loadHeroMeta(getAnalyzeUrl());
+    }
+
+    function eventUrlDefault() {
+      return (document.body.getAttribute("data-default-event-url") || "").trim();
+    }
+
+    function getAnalyzeUrl() {
+      if (carouselEvents.length && carouselIndex >= 0 && carouselIndex < carouselEvents.length) {
+        const u = (carouselEvents[carouselIndex].url || "").trim();
+        if (u) return u;
+      }
+      return eventUrlDefault();
+    }
+
+    function updateCarouselHint() {
+      const el = $("eventsLoadHint");
+      if (!el) return;
+      const n = carouselEvents.length;
+      if (!n) {
+        el.textContent = "Nenhum evento futuro na lista.";
+        el.hidden = false;
+        return;
+      }
+      el.textContent = "";
+      el.hidden = true;
+    }
+
+    function carouselStep(delta) {
+      const n = carouselEvents.length;
+      if (n < 1) return;
+      carouselIndex = (carouselIndex + delta + n) % n;
+      document.body.setAttribute("data-default-event-url", getAnalyzeUrl());
+      updateCarouselHint();
+      void loadHeroMeta(getAnalyzeUrl());
+      loadUfc();
+    }
+
+    function updateStakeReturn(panel) {
+      const input = panel.querySelector(".bet-stake-input");
+      const retEl = panel.querySelector(".bet-sb-return");
+      if (!input || !retEl) return;
+      const stake = parseInt(input.value, 10) || 0;
+      const orR = parseFloat(panel.dataset.oddsRed || "0");
+      const orB = parseFloat(panel.dataset.oddsBlue || "0");
+      const rR = Math.round(stake * orR);
+      const rB = Math.round(stake * orB);
+      retEl.textContent =
+        stake > 0
+          ? `Ganha até ${rR} créditos (vermelho) · ${rB} créditos (azul) se acertar`
+          : "";
+    }
+
+    function bindBetStakeListeners(root) {
+      if (!root) return;
+      root.querySelectorAll(".bet-sportsbook").forEach((panel) => {
+        const input = panel.querySelector(".bet-stake-input");
+        if (!input) return;
+        const fn = () => updateStakeReturn(panel);
+        input.addEventListener("input", fn);
+        fn();
+      });
+    }
+
+    function fightCardHtml(f, idx, evUrl) {
+      const fightNum = idx + 1;
+      if (f.error) {
+        return `<article class="fight-card"><div class="fight-error">${esc(f.division)} — ${esc(f.error)}</div></article>`;
+      }
+      const r = f.red;
+      const b = f.blue;
+      if (!r || !b) {
+        return `<article class="fight-card"><div class="fight-error">${esc(f.division || "Luta")} — dados do lutador incompletos.</div></article>`;
+      }
+      const pr = f.prob_red_pct ?? 0;
+      const pb = f.prob_blue_pct ?? 0;
+      const m = f.methods_pct || {};
+      const top = (f.top_scenarios || []).map((t) => `<li>${esc(t.label)} — <strong>${t.prob_pct}%</strong></li>`).join("");
+      const ifw = f.if_favorite_wins_pct || {};
+      const rankR = r.rank_card != null ? "#" + r.rank_card : "—";
+      const rankB = b.rank_card != null ? "#" + b.rank_card : "—";
+      return `
+        <article class="fight-card">
+          <div class="fight-card-inner">
+            <h2>${esc(f.division)}</h2>
+            <div class="matchup">
+              <div class="fighter-col red-side">
+                ${photoBlock(r.photo_url, r.name)}
+                <div class="fighter-name">${esc(r.name)}</div>
+                <div class="fighter-meta">${esc(r.record)} · ${rankR}</div>
+              </div>
+              <div class="vs-badge">VS</div>
+              <div class="fighter-col blue-side">
+                ${photoBlock(b.photo_url, b.name)}
+                <div class="fighter-name">${esc(b.name)}</div>
+                <div class="fighter-meta">${esc(b.record)} · ${rankB}</div>
+              </div>
+            </div>
+            <div class="prob-bar-wrap">
+              <div class="prob-bar">
+                <div class="red" style="width:${pr}%"></div>
+                <div class="blue" style="width:${pb}%"></div>
+              </div>
+              <div class="prob-labels">
+                <span class="red-pct">${pr}%</span>
+                <span class="blue-pct">${pb}%</span>
+              </div>
+            </div>
+            <div class="favorite-badge">Favorito (modelo legado): ${esc(f.favorite_name)}</div>
+            <div class="methods">
+              <div class="method-pill"><strong>${m.ko_tko ?? 0}%</strong>KO / TKO</div>
+              <div class="method-pill"><strong>${m.decisao ?? 0}%</strong>Decisão</div>
+              <div class="method-pill"><strong>${m.finalizacao ?? 0}%</strong>Finalização</div>
+            </div>
+            <div class="prediction">
+              <strong>Cenário mais provável:</strong>
+              ${esc(f.predicted_winner)} por <strong>${esc(f.predicted_method)}</strong>
+              <div class="round-hint">Se o favorito vencer — KO ${ifw.ko_tko ?? 0}% · Dec ${ifw.decisao ?? 0}% · Finaliz. ${ifw.finalizacao ?? 0}%</div>
+              <div class="round-hint">${esc(f.round_hint)}</div>
+            </div>
+            <div class="top-scenarios">Outros cenários (top 3):<ul>${top}</ul></div>
+            ${advancedPredictionBlock(f.advanced_prediction, f)}
+            ${bettingPanel(f, fightNum, evUrl)}
+          </div>
+        </article>`;
+    }
+
+    function openFightModal(idx) {
+      const data = window.__ufcAnalyzeData;
+      const fights = data && Array.isArray(data.fights) ? data.fights : [];
+      const f = fights[idx];
+      const overlay = $("fightModal");
+      const body = $("fightModalBody");
+      if (!overlay || !body || !f) return;
+      const evUrl = (data && data.event_url) || lastUfcEventUrl || getAnalyzeUrl();
+      body.innerHTML = fightCardHtml(f, idx, evUrl);
+      overlay.hidden = false;
+      bindBetStakeListeners(body);
+    }
+
+    function closeFightModal() {
+      const overlay = $("fightModal");
+      const body = $("fightModalBody");
+      if (body) body.innerHTML = "";
+      if (overlay) overlay.hidden = true;
+    }
+
+    async function loadEventsList(forceRefresh) {
+      const hint = $("eventsLoadHint");
+      if (hint) {
+        hint.hidden = false;
+        hint.textContent = "Carregando lista de eventos…";
+      }
+      try {
+        const url = "/api/ufc/events" + (forceRefresh ? "?refresh=1" : "");
+        const data = await fetchJsonUrl(url);
+        if (!data.ok) {
+          carouselEvents = [];
+          carouselIndex = 0;
+          if (hint) hint.textContent = (data.errors && data.errors[0]) || "Lista indisponível.";
+          return;
+        }
+        if (!Array.isArray(data.future_events) || !data.future_events.length) {
+          carouselEvents = [];
+          carouselIndex = 0;
+          if (hint) hint.textContent = "Nenhum evento futuro na lista oficial.";
+          return;
+        }
+        carouselEvents = data.future_events.map((e) => ({ title: e.title, url: e.url }));
+        if ($("dashNextEvent") && carouselEvents[0] && carouselEvents[0].title) {
+          $("dashNextEvent").textContent = carouselEvents[0].title;
+        }
+        if (data.next_future && data.next_future.url) {
+          const idx = carouselEvents.findIndex((e) => e.url === data.next_future.url);
+          carouselIndex = idx >= 0 ? idx : 0;
+          document.body.setAttribute("data-default-event-url", data.next_future.url);
+        } else {
+          carouselIndex = 0;
+          if (carouselEvents[0]) document.body.setAttribute("data-default-event-url", carouselEvents[0].url);
+        }
+        updateCarouselHint();
+      } catch (e) {
+        carouselEvents = [];
+        carouselIndex = 0;
+        if (hint) hint.textContent = e.message || "Erro ao listar eventos.";
+      } finally {
+        void loadHeroMeta(getAnalyzeUrl());
+      }
+    }
+
+    async function loadUfc() {
+      const url = getAnalyzeUrl();
+      if (!url) {
+        $("status").textContent = "Aguarde a lista de eventos.";
+        $("status").className = "status error";
+        return;
+      }
+      const mySeq = ++loadUfcSeq;
+      if (analyzeAbort) analyzeAbort.abort();
+      analyzeAbort = new AbortController();
+      const abortSig = analyzeAbort.signal;
+
+      const refresh = $("refresh") && $("refresh").checked ? "1" : "0";
+      const overlay = $("loadingOverlay");
+      if (overlay) overlay.hidden = false;
+      if (loadUfcOverlayGuard) clearTimeout(loadUfcOverlayGuard);
+      loadUfcOverlayGuard = window.setTimeout(() => {
+        loadUfcOverlayGuard = null;
+        const ov = $("loadingOverlay");
+        if (ov && !ov.hidden) {
+          ov.hidden = true;
+          const st = $("status");
+          if (st && (st.textContent || "").indexOf("Analisando") !== -1) {
+            st.textContent = "Tempo esgotado — tente de novo ou desmarque «Ignorar cache».";
+            st.className = "status error";
+          }
+        }
+      }, 480000);
+      $("status").textContent = "Analisando evento…";
+      $("status").className = "status";
+      $("content").hidden = true;
+      if ($("dashAnalyzeStatus")) $("dashAnalyzeStatus").textContent = "Analisando…";
+      if ($("dashFightsCount")) $("dashFightsCount").textContent = "";
+      setDashBadge("dashAnalyzeBadge", "RUN", "warn");
+
+      try {
+        const res = await fetchWithTimeout(
+          "/api/analyze?sport=ufc&url=" + encodeURIComponent(url) + "&refresh=" + refresh,
+          {
+            credentials: "same-origin",
+            signal: abortSig,
+            headers: { Accept: "application/json" },
+          },
+          420000
+        );
+        const data = await readJsonOrThrow(res);
+        if (!data.ok) {
+          hideHeroEvent();
+          $("status").textContent = (data.errors && data.errors[0]) || "Falha na análise.";
+          $("status").className = "status error";
+          if ($("dashAnalyzeStatus")) $("dashAnalyzeStatus").textContent = "Falha";
+          setDashBadge("dashAnalyzeBadge", "ERRO", "bad");
+          return;
+        }
+        $("status").textContent = "";
+        $("status").className = "status";
+        if ($("dashAnalyzeStatus")) $("dashAnalyzeStatus").textContent = "OK";
+        if ($("dashFightsCount")) $("dashFightsCount").textContent = Array.isArray(data.fights) ? data.fights.length + " lutas" : "";
+        setDashBadge("dashAnalyzeBadge", "OK", "ok");
+        lastUfcEventUrl = data.event_url || url || eventUrlDefault();
+        renderHeroEvent(data);
+
+        const title = data.event_title ? `<div class="event-title">${esc(data.event_title)}</div>` : "";
+        const fightsArr = Array.isArray(data.fights) ? data.fights : [];
+        const list = fightsArr
+          .map((f, idx) => {
+            const fightNum = idx + 1;
+            const div = (f.division || "Luta").trim();
+            const r = f.red;
+            const b = f.blue;
+            const rName = (r && r.name) || "Vermelho";
+            const bName = (b && b.name) || "Azul";
+            const rPhoto = (r && r.photo_url) || "";
+            const bPhoto = (b && b.photo_url) || "";
+            const rSrc = rPhoto ? "/api/proxy-image?url=" + encodeURIComponent(rPhoto) : "";
+            const bSrc = bPhoto ? "/api/proxy-image?url=" + encodeURIComponent(bPhoto) : "";
+            const pr = f.prob_red_pct ?? 0;
+            const pb = f.prob_blue_pct ?? 0;
+            const tier =
+              (f.advanced_prediction && f.advanced_prediction.risk && f.advanced_prediction.risk.tier) ||
+              f.risk_tier ||
+              "—";
+            const tierCls = tier === "SAFE" ? "ok" : tier === "RISKY" ? "warn" : tier === "SKIP" ? "bad" : "muted";
+            const err = f.error ? ` · ${esc(String(f.error))}` : "";
+            return `
+              <button type="button" class="fight-row" data-fight-idx="${idx}">
+                <span class="fight-row__n">#${fightNum}</span>
+                <span class="fight-row__avs" aria-hidden="true">
+                  ${rSrc ? `<img class="fight-row__av fight-row__av--red" src="${esc(rSrc)}" alt="" loading="lazy" />` : `<span class="fight-row__av fight-row__av--ph"></span>`}
+                  ${bSrc ? `<img class="fight-row__av fight-row__av--blue" src="${esc(bSrc)}" alt="" loading="lazy" />` : `<span class="fight-row__av fight-row__av--ph"></span>`}
+                </span>
+                <span class="fight-row__main">
+                  <span class="fight-row__names">${esc(rName)} <span class="fight-row__vs">×</span> ${esc(bName)}</span>
+                  <span class="fight-row__sub">${esc(div)}${err}</span>
+                </span>
+                <span class="fight-row__prob">
+                  <span class="fight-row__p fight-row__p--red">${pr}%</span>
+                  <span class="fight-row__p fight-row__p--blue">${pb}%</span>
+                </span>
+                <span class="fight-row__tier fight-row__tier--${tierCls}">${esc(String(tier))}</span>
+              </button>`;
+          })
+          .join("");
+        $("content").innerHTML = title + `<div class="fight-list-compact" id="fightListCompact">${list}</div>`;
+        $("content").hidden = false;
+        window.__ufcAnalyzeData = data;
+        savePredictionSnapshot(data);
+        // detalhes (apostas) agora abrem no modal
+        if (window.UfcParlay && typeof window.UfcParlay.onCardLoaded === "function") {
+          window.UfcParlay.onCardLoaded(data);
+        }
+      } catch (e) {
+        if (e && e.name === "AbortError" && mySeq !== loadUfcSeq) {
+          /* nova análise substituiu esta — não mostrar erro */
+        } else {
+          hideHeroEvent();
+          const msg =
+            e && e.name === "AbortError"
+              ? "Tempo esgotado (~7 min). O card grande demora; tente sem «Ignorar cache» ou verifique a rede."
+              : (e && e.message) || "Erro desconhecido";
+          $("status").textContent = "Erro: " + msg;
+          $("status").className = "status error";
+        }
+      } finally {
+        if (loadUfcOverlayGuard) {
+          clearTimeout(loadUfcOverlayGuard);
+          loadUfcOverlayGuard = null;
+        }
+        if (overlay) overlay.hidden = true;
+      }
+      void refreshAuthUI();
+    }
+
+    const blk = $("blockUfcMain");
+    if (blk) {
+      blk.addEventListener("click", async (ev) => {
+        const btn = ev.target.closest(".bet-sb-btn");
+        if (!btn || btn.disabled) return;
+        const panel = btn.closest(".bet-sportsbook");
+        if (!panel) return;
+        const pmsg = panel.querySelector(".bet-msg");
+        const stake = parseInt(panel.querySelector(".bet-stake-input") && panel.querySelector(".bet-stake-input").value, 10) || 0;
+        const side = btn.getAttribute("data-side");
+        const fightIndex = parseInt(panel.getAttribute("data-fight-index"), 10);
+        if (!lastUfcEventUrl) {
+          if (pmsg) pmsg.textContent = "Carregue o evento antes de apostar.";
+          return;
+        }
+        if (pmsg) pmsg.textContent = "Enviando…";
+        try {
+          const { res, data } = await postJson("/api/bet", {
+            event_url: lastUfcEventUrl,
+            fight_index: fightIndex,
+            side,
+            stake,
+          });
+          if (!data.ok) {
+            if (pmsg) pmsg.textContent = data.message || data.error || "Falha.";
+            return;
+          }
+          if (pmsg)
+            pmsg.textContent = `Aposta #${data.bet_id} registrada. Retorno potencial: ${data.payout_if_win} créditos.`;
+          if (pmsg) pmsg.classList.add("bet-msg--ok");
+          btn.classList.add("bet-sb-btn--pulse");
+          window.setTimeout(() => btn.classList.remove("bet-sb-btn--pulse"), 650);
+          await refreshAuthUI();
+          bindBetStakeListeners(panel);
+        } catch (e) {
+          if (pmsg) pmsg.textContent = e.message || "Erro de rede.";
+        }
+      });
+    }
+
+    async function doLogout() {
+      await postJson("/api/auth/logout", {});
+      await refreshAuthUI();
+    }
+
+    $("topbarLogout")?.addEventListener("click", doLogout);
+
+    $("btnHeroLoad").addEventListener("click", () => {
+      $("main")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      loadUfc();
+    });
+    $("heroCarouselPrev")?.addEventListener("click", () => carouselStep(-1));
+    $("heroCarouselNext")?.addEventListener("click", () => carouselStep(1));
+    $("btnRefreshEvents")?.addEventListener("click", () => loadEventsList(true));
+    $("heroEventVisual")?.addEventListener("keydown", (ev) => {
+      if (ev.key === "ArrowLeft") {
+        ev.preventDefault();
+        carouselStep(-1);
+      } else if (ev.key === "ArrowRight") {
+        ev.preventDefault();
+        carouselStep(1);
+      }
+    });
+
+    (async function boot() {
+      bindNavClick("navUfcOnly", "ufc");
+      bindNavClick("navResults", "results");
+      $("btnLoadEventResults")?.addEventListener("click", () => loadEventResults());
+      // Sidebar: colapsar (desktop) / abrir (mobile)
+      const BODY = document.body;
+      const SIDEBAR_KEY = "ufc_sidebar_collapsed_v1";
+      const isMobile = () => window.matchMedia && window.matchMedia("(max-width: 920px)").matches;
+      const applyCollapsed = (collapsed) => {
+        BODY.classList.toggle("sidebar-collapsed", !!collapsed);
+        try {
+          localStorage.setItem(SIDEBAR_KEY, collapsed ? "1" : "0");
+        } catch (_) {}
+      };
+      try {
+        const saved = localStorage.getItem(SIDEBAR_KEY);
+        if (saved === "1") applyCollapsed(true);
+      } catch (_) {}
+      const toggleBtn = $("sidebarToggle");
+      if (toggleBtn) {
+        toggleBtn.addEventListener("click", () => {
+          if (isMobile()) {
+            BODY.classList.toggle("sidebar-open");
+          } else {
+            applyCollapsed(!BODY.classList.contains("sidebar-collapsed"));
+          }
+        });
+      }
+      // fechar sidebar no mobile ao clicar fora
+      document.addEventListener("click", (ev) => {
+        if (!isMobile()) return;
+        if (!BODY.classList.contains("sidebar-open")) return;
+        const sb = document.querySelector(".sidebar");
+        const btn = $("sidebarToggle");
+        if (sb && sb.contains(ev.target)) return;
+        if (btn && btn.contains(ev.target)) return;
+        BODY.classList.remove("sidebar-open");
+      });
+      // Eventos do player da home
+      const mv = $("mainStreamVideo");
+      if (mv) {
+        mv.addEventListener("error", () => {
+          const err = mv.error;
+          const code = err ? err.code : 0;
+          const map = { 1: "ABORTED", 2: "NETWORK", 3: "DECODE", 4: "SRC_NOT_SUPPORTED" };
+          mainSetStatus(`Player: erro ${code} (${map[code] || "desconhecido"}). O stream pode estar bloqueado/incompatível.`);
+          setDashBadge("dashStreamBadge", "ERRO", "bad");
+        });
+        mv.addEventListener("waiting", () => {
+          const cur = ($("mainStreamStatus") && $("mainStreamStatus").textContent) || "";
+          if (!cur) mainSetStatus("Carregando buffer… (se nunca iniciar, o stream pode não ser compatível)");
+          setDashBadge("dashStreamBadge", "BUFFER", "warn");
+        });
+        mv.addEventListener("playing", () => {
+          const cur = ($("mainStreamStatus") && $("mainStreamStatus").textContent) || "";
+          if (cur && cur.startsWith("Carregando buffer")) mainSetStatus("");
+          setDashBadge("dashStreamBadge", "TOCANDO", "ok");
+        });
+      }
+
+      const sp = new URLSearchParams(window.location.search);
+      const evParam = (sp.get("event_url") || "").trim();
+      if (evParam) {
+        document.body.setAttribute("data-default-event-url", evParam);
+      }
+      if (sp.get("refresh") === "1" && $("refresh")) $("refresh").checked = true;
+      await Promise.all([loadEventsList(false), refreshAuthUI()]);
+      loadMainStreamFromSettings();
+      $("dashNextRefresh")?.addEventListener("click", () => loadEventsList(true));
+      // Link "Abrir" para o evento atual (ufc.com.br)
+      const setOpen = () => {
+        const a = $("dashNextOpen");
+        if (!a) return;
+        const u = getAnalyzeUrl();
+        if (u) {
+          a.href = u;
+          a.setAttribute("aria-disabled", "false");
+        } else {
+          a.href = "#";
+          a.setAttribute("aria-disabled", "true");
+        }
+      };
+      setOpen();
+      window.setInterval(setOpen, 4000);
+
+      // Modal de detalhes da luta
+      $("fightModalClose")?.addEventListener("click", closeFightModal);
+      $("fightModal")?.addEventListener("click", (ev) => {
+        if (ev.target && ev.target.id === "fightModal") closeFightModal();
+      });
+      document.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") closeFightModal();
+      });
+      $("content")?.addEventListener("click", (ev) => {
+        const btn = ev.target.closest(".fight-row");
+        if (!btn) return;
+        const idx = parseInt(btn.getAttribute("data-fight-idx"), 10);
+        if (!Number.isFinite(idx)) return;
+        openFightModal(idx);
+      });
+
+      if (sp.get("noload") === "1") {
+        $("status").textContent = "Carregamento do card desligado (?noload=1). Recarregue sem esse parâmetro ou use «Ver card completo».";
+        $("status").className = "status";
+        return;
+      }
+      loadUfc();
+    })();
+  </script>
+</body>
+</html>

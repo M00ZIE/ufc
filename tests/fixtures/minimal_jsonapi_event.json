@@ -1,0 +1,18 @@
+{
+  "data": [],
+  "included": [
+    {
+      "type": "node--fight",
+      "id": "x",
+      "attributes": {
+        "fightmetric_id": 90001,
+        "red_corner_fight_outcome": "Win",
+        "blue_corner_fight_outcome": "Loss",
+        "fight_final_method": "KO/TKO - Punches",
+        "fight_final_round": 2,
+        "fight_final_time": "3:21",
+        "title": "Red vs Blue"
+      }
+    }
+  ]
+}

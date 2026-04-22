@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>UFC Analytics</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}" />
+</head>
+<body class="admin">
+  <header class="admin-header">
+    <span class="admin-header-brand">UFC Analytics</span>
+    <span class="admin-header-sub">Painel interno · créditos fictícios</span>
+    <div class="admin-header-actions">
+      <span class="admin-email" id="adminEmailHi">{{ admin_email | e }}</span>
+      <button type="button" class="admin-btn admin-btn--ghost" id="btnRefreshStats" title="Atualizar números">Atualizar</button>
+      <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_panel.admin_logout') }}">Sair</a>
+      <a class="admin-btn admin-btn--ghost" href="/">Site</a>
+    </div>
+  </header>
+
+  <div class="admin-toolbar">
+    <label>Busca usuário <input type="search" id="userSearch" class="admin-input admin-input--wide" placeholder="filtrar por email…" /></label>
+    <span class="admin-msg" id="toolbarStatus"></span>
+  </div>
+
+  <main class="admin-main">
+    <div class="admin-grid-top">
+      <section class="admin-card" id="sectionStats">
+        <h2>Dashboard</h2>
+        <div class="admin-grid-stats" id="dashStats">
+          <div class="admin-stat"><div class="admin-stat-val" id="stUsers">—</div><div class="admin-stat-label">Usuários</div></div>
+          <div class="admin-stat"><div class="admin-stat-val" id="stOpen">—</div><div class="admin-stat-label">Apostas abertas</div></div>
+          <div class="admin-stat"><div class="admin-stat-val" id="stSettled">—</div><div class="admin-stat-label">Liquidadas</div></div>
+          <div class="admin-stat"><div class="admin-stat-val admin-stat-val--credits" id="stCredits">—</div><div class="admin-stat-label">Créditos no sistema</div></div>
+        </div>
+      </section>
+
+      <section class="admin-card" id="sectionHero">
+        <h2>Próximo evento</h2>
+        <p class="admin-msg" id="heroStatus">Carregando…</p>
+        <div class="admin-hero-preview" id="heroBlock" hidden>
+          <img class="admin-hero-img" id="heroImg" alt="" width="200" height="112" />
+          <div class="admin-hero-meta">
+            <div id="heroTitle" class="admin-hero-title"></div>
+            <div id="heroWhen" class="admin-msg"></div>
+            <a id="heroLink" href="#" target="_blank" rel="noopener">Abrir análise</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-card" id="sectionIptv">
+        <h2>IPTV</h2>
+        <p class="admin-msg">Selecione o canal que vai ficar passando na página principal.</p>
+        <div class="admin-filters">
+          <label style="min-width:420px;">playlist_url
+            <input type="url" id="iptvPlaylistUrl" class="admin-input" placeholder="https://.../playlist.m3u ou .../get.php?..." />
+          </label>
+          <button type="button" class="admin-btn admin-btn--ghost" id="btnLoadIptvPlaylist">Carregar playlist</button>
+          <label style="min-width:260px;">buscar canal
+            <input type="search" id="iptvChannelSearch" class="admin-input" placeholder="ex.: Combate" />
+          </label>
+          <label style="min-width:340px;">canal
+            <select id="iptvChannelSelect" class="admin-select" style="min-width:340px;">
+              <option value="">— carregue a playlist —</option>
+            </select>
+          </label>
+          <label class="admin-check">
+            <input type="checkbox" id="iptvAutoplayEnabled" />
+            <span>autoplay</span>
+          </label>
+          <button type="button" class="admin-btn admin-btn--primary" id="btnSaveIptv">Salvar IPTV</button>
+          <a class="admin-btn admin-btn--ghost" id="btnOpenHome" href="/" target="_blank" rel="noopener">Abrir página principal</a>
+        </div>
+        <p class="admin-msg" id="iptvPickedPreview"></p>
+        <p class="admin-msg" id="iptvAdminMsg" role="status"></p>
+      </section>
+    </div>
+
+    <section class="admin-card">
+      <h2>Usuários</h2>
+      <div id="usersMsg" class="admin-msg">Carregando…</div>
+      <div class="admin-table-wrap" id="usersWrap" hidden>
+        <table class="admin-table" id="usersTable">
+          <thead>
+            <tr>
+              <th data-sort="id">ID</th>
+              <th data-sort="email">Email</th>
+              <th class="num" data-sort="balance">Saldo (créditos)</th>
+              <th data-sort="blocked">Status</th>
+              <th class="num" data-sort="total_bets">Apostas</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Ranking (liquidado)</h2>
+      <div class="admin-chart-wrap"><canvas id="rankChart" width="800" height="220" aria-label="Gráfico taxa de acerto"></canvas></div>
+      <div class="admin-table-wrap">
+        <table class="admin-table" id="rankTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Email</th>
+              <th class="num">% acerto</th>
+              <th class="num">Vitórias</th>
+              <th class="num">Derrotas</th>
+              <th class="num">Ganho líquido (créditos)</th>
+            </tr>
+          </thead>
+          <tbody id="rankBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Histórico de apostas</h2>
+      <div class="admin-filters">
+        <label>user_id <input type="text" id="fltUid" class="admin-input admin-input--narrow" inputmode="numeric" /></label>
+        <label>event_url <input type="text" id="fltUrl" class="admin-input" style="min-width:240px" placeholder="https://..." /></label>
+        <label>Busca <input type="search" id="fltSearch" class="admin-input" placeholder="nome ou URL" /></label>
+        <label>Status
+          <select id="fltStatus" class="admin-select">
+            <option value="">todos</option>
+            <option value="open">pendente</option>
+            <option value="won">ganhou</option>
+            <option value="lost">perdeu</option>
+          </select>
+        </label>
+        <button type="button" class="admin-btn admin-btn--primary" id="btnLoadBets">Filtrar</button>
+        <a class="admin-btn admin-btn--ghost" id="btnCsv" href="#">Exportar CSV</a>
+      </div>
+      <div id="betsMsg" class="admin-msg"></div>
+      <div class="admin-table-wrap" id="betsWrap" hidden>
+        <table class="admin-table" id="betsTable">
+          <thead>
+            <tr>
+              <th data-sort="id">#</th>
+              <th data-sort="user_email">User</th>
+              <th>Luta</th>
+              <th data-sort="side">Lado</th>
+              <th class="num" data-sort="stake">Stake</th>
+              <th class="num" data-sort="odds_taken">Odd</th>
+              <th class="num">Edge</th>
+              <th>Risco</th>
+              <th data-sort="status">Status</th>
+              <th class="num" data-sort="payout">Retorno</th>
+            </tr>
+          </thead>
+          <tbody id="betsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <h2>Liquidar luta (manual)</h2>
+      <p class="admin-msg">Informe o vencedor real no octógono (canto vermelho ou azul). Créditos fictícios.</p>
+      <form id="settleForm" class="admin-settle-form">
+        <label>event_url <input type="url" name="event_url" class="admin-input" required style="min-width:260px" /></label>
+        <label>fight_index <input type="number" name="fight_index" class="admin-input admin-input--narrow" min="1" required /></label>
+        <label>Vencedor
+          <select name="winner_side" class="admin-select">
+            <option value="red">Vermelho</option>
+            <option value="blue">Azul</option>
+          </select>
+        </label>
+        <button type="submit" class="admin-btn admin-btn--primary">Liquidar</button>
+      </form>
+      <p class="admin-msg" id="settleMsg" role="status"></p>
+    </section>
+  </main>
+
+  <div class="admin-modal-overlay" id="confirmModal" hidden>
+    <div class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <h3 id="confirmTitle">Confirmar</h3>
+      <p id="confirmText"></p>
+      <div class="admin-modal-actions">
+        <button type="button" class="admin-btn admin-btn--ghost" id="confirmCancel">Cancelar</button>
+        <button type="button" class="admin-btn admin-btn--primary" id="confirmOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='admin.js') }}"></script>
+  <script>
+    window.__ADMIN_BOOT__ = true;
+  </script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Entrar — UFC Analytics</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <a class="auth-back" href="/">← Início</a>
+    <h1 class="auth-h1">Entrar</h1>
+    <p class="auth-lead">Conta para apostas demo (créditos fictícios).</p>
+    <form id="loginForm" class="auth-form">
+      <label class="auth-label">Email
+        <input type="email" name="email" class="auth-input auth-input--wide" required autocomplete="username" />
+      </label>
+      <label class="auth-label">Senha
+        <input type="password" name="password" class="auth-input auth-input--wide" required minlength="8" autocomplete="current-password" />
+      </label>
+      <p class="auth-error" id="loginErr" role="alert"></p>
+      <button type="submit" class="btn-primary auth-submit">Entrar</button>
+    </form>
+    <p class="auth-footer"><a href="/register">Criar conta</a></p>
+  </div>
+  <script src="{{ url_for('static', filename='auth.js') }}"></script>
+  <script>
+    const NEXT = {{ next_url | tojson }};
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const err = document.getElementById("loginErr");
+      err.textContent = "";
+      try {
+        const { data } = await apiPostJson("/api/auth/login", {
+          email: fd.get("email"),
+          password: fd.get("password"),
+        });
+        if (!data.ok) {
+          err.textContent = data.message || data.error || "Falha no login.";
+          return;
+        }
+        window.location.href = NEXT || "/";
+      } catch (x) {
+        err.textContent = x.message || "Erro de rede.";
+      }
+    });
+  </script>
+</body>
+</html>

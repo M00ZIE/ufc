@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cadastro — UFC Analytics</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="auth-page">
+  <div class="auth-card">
+    <a class="auth-back" href="/">← Início</a>
+    <h1 class="auth-h1">Criar conta</h1>
+    <p class="auth-lead">Saldo inicial: 1000 créditos (demo). Senha mínima: 8 caracteres.</p>
+    <form id="regForm" class="auth-form">
+      <label class="auth-label">Email
+        <input type="email" name="email" class="auth-input auth-input--wide" required autocomplete="username" />
+      </label>
+      <label class="auth-label">Senha
+        <input type="password" name="password" class="auth-input auth-input--wide" required minlength="8" autocomplete="new-password" />
+      </label>
+      <p class="auth-error" id="regErr" role="alert"></p>
+      <button type="submit" class="btn-primary auth-submit">Registrar</button>
+    </form>
+    <p class="auth-footer"><a href="/login">Já tenho conta</a></p>
+  </div>
+  <script src="{{ url_for('static', filename='auth.js') }}"></script>
+  <script>
+    document.getElementById("regForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const err = document.getElementById("regErr");
+      err.textContent = "";
+      try {
+        const { data } = await apiPostJson("/api/auth/register", {
+          email: fd.get("email"),
+          password: fd.get("password"),
+        });
+        if (!data.ok) {
+          err.textContent = data.message || data.error || "Não foi possível registrar.";
+          return;
+        }
+        window.location.href = "/login?next=/bets";
+      } catch (x) {
+        err.textContent = x.message || "Erro de rede.";
+      }
+    });
+  </script>
+</body>
+</html>

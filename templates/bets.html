@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Minhas apostas — UFC Analytics</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body class="auth-page auth-page--wide bets-page">
+  <div class="bets-shell">
+    <header class="bets-header">
+      <a class="bets-back" href="/">← Início</a>
+      <div class="bets-header-row">
+        <div>
+          <h1 class="bets-title">Minhas apostas</h1>
+          <p id="betsStatus" class="bets-sub" role="status">Carregando…</p>
+        </div>
+      </div>
+    </header>
+
+    <div class="bets-empty" id="betsEmpty" hidden>
+      <p class="bets-empty-text">Nenhuma aposta registrada ainda.</p>
+      <a class="bets-empty-cta" href="/">Ver eventos e analisar card</a>
+    </div>
+
+    <div class="bets-table-wrap bets-table-wrap--styled" id="betsTableWrap" hidden>
+      <h2 class="bets-section-h">Apostas simples</h2>
+      <table class="bets-table bets-table--history" id="betsTable">
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Luta</th>
+            <th>Lado</th>
+            <th class="num">Stake</th>
+            <th class="num">Odd</th>
+            <th>Status</th>
+            <th class="num">Retorno</th>
+            <th class="num">P/L</th>
+          </tr>
+        </thead>
+        <tbody id="betsBody"></tbody>
+      </table>
+    </div>
+
+    <div class="bets-table-wrap bets-table-wrap--styled" id="parlayTableWrap" hidden>
+      <h2 class="bets-section-h">Parlays (múltiplas)</h2>
+      <table class="bets-table bets-table--history" id="parlayTable">
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Evento</th>
+            <th class="num">Pernas</th>
+            <th class="num">Stake</th>
+            <th class="num">Odd comb.</th>
+            <th>Status</th>
+            <th class="num">Retorno</th>
+          </tr>
+        </thead>
+        <tbody id="parlayBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <script>
+    function esc(s) {
+      if (s == null) return "";
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function statusBadge(st) {
+      const m = {
+        open: { cls: "bet-status--open", label: "Aberta" },
+        won: { cls: "bet-status--won", label: "Ganhou" },
+        lost: { cls: "bet-status--lost", label: "Perdeu" },
+      };
+      const x = m[st] || { cls: "bet-status--na", label: String(st || "—") };
+      return `<span class="bet-status ${x.cls}">${esc(x.label)}</span>`;
+    }
+
+    function sideBadge(side) {
+      const s = (side || "").toLowerCase();
+      if (s === "red")
+        return `<span class="bet-corner bet-corner--red"><span class="bet-corner-dot"></span>Vermelho</span>`;
+      if (s === "blue")
+        return `<span class="bet-corner bet-corner--blue"><span class="bet-corner-dot"></span>Azul</span>`;
+      return esc(String(side || "—"));
+    }
+
+    (async () => {
+      const st = document.getElementById("betsStatus");
+      const wrap = document.getElementById("betsTableWrap");
+      const empty = document.getElementById("betsEmpty");
+      const body = document.getElementById("betsBody");
+      try {
+        const res = await fetch("/api/bet/history?limit=100", {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+        });
+        const data = await res.json();
+        if (res.status === 401 || data.error === "login_required") {
+          st.innerHTML = 'Faça <a class="bets-inline-link" href="/login?next=/bets">login</a> para ver suas apostas.';
+          return;
+        }
+        if (!data.ok) {
+          st.textContent = data.message || "Erro.";
+          return;
+        }
+        const rows = data.bets || [];
+        const parlays = data.parlays || [];
+        if (!rows.length && !parlays.length) {
+          st.textContent = "";
+          st.classList.add("bets-sub--muted");
+          empty.hidden = false;
+          return;
+        }
+        const bits = [];
+        if (rows.length) bits.push(rows.length === 1 ? "1 simples" : rows.length + " simples");
+        if (parlays.length) bits.push(parlays.length === 1 ? "1 parlay" : parlays.length + " parlays");
+        st.textContent = bits.join(" · ");
+        st.classList.remove("bets-sub--muted");
+        empty.hidden = true;
+        wrap.hidden = !rows.length;
+        body.innerHTML = rows
+          .map((b) => {
+            let plVal =
+              b.status === "open"
+                ? "—"
+                : b.status === "won"
+                  ? "+" + (Number(b.payout) - Number(b.stake))
+                  : String(-Number(b.stake));
+            const plCls =
+              b.status === "won" ? "pl-pos" : b.status === "lost" ? "pl-neg" : "pl-pend";
+            const payout =
+              b.payout != null && b.status !== "open" ? String(b.payout) : b.status === "open" ? "—" : "0";
+            return `<tr>
+              <td class="num bet-id">${esc(String(b.id))}</td>
+              <td class="bet-matchup">${esc(b.red_name)} <span class="bet-vs">×</span> ${esc(b.blue_name)}</td>
+              <td>${sideBadge(b.side)}</td>
+              <td class="num">${esc(String(b.stake))} <span class="bet-unit">cr.</span></td>
+              <td class="num bet-odd">${esc(String(b.odds_taken))}</td>
+              <td>${statusBadge(b.status)}</td>
+              <td class="num">${esc(payout)}${payout !== "—" ? ' <span class="bet-unit">cr.</span>' : ""}</td>
+              <td class="num ${plCls}">${esc(plVal)}</td>
+            </tr>`;
+          })
+          .join("");
+
+        const pwrap = document.getElementById("parlayTableWrap");
+        const pbody = document.getElementById("parlayBody");
+        if (pwrap && pbody) {
+          pwrap.hidden = !parlays.length;
+          if (parlays.length) {
+            pbody.innerHTML = parlays
+              .map((p) => {
+                let legsN = 0;
+                try {
+                  const lj = JSON.parse(p.legs_json || "[]");
+                  legsN = Array.isArray(lj) ? lj.length : 0;
+                } catch (_) {
+                  legsN = 0;
+                }
+                const ret =
+                  p.status === "open" ? "—" : p.payout != null ? String(p.payout) : "0";
+                return `<tr>
+                  <td class="num">${esc(String(p.id))}</td>
+                  <td class="bet-matchup"><span class="bet-ev-url">${esc((p.event_url || "").slice(0, 48))}</span></td>
+                  <td class="num">${esc(String(legsN))}</td>
+                  <td class="num">${esc(String(p.stake))} <span class="bet-unit">cr.</span></td>
+                  <td class="num bet-odd">${esc(String(p.combined_odds))}</td>
+                  <td>${statusBadge(p.status)}</td>
+                  <td class="num">${esc(ret)}${ret !== "—" ? ' <span class="bet-unit">cr.</span>' : ""}</td>
+                </tr>`;
+              })
+              .join("");
+          }
+        }
+      } catch (e) {
+        st.textContent = e.message || "Erro de rede.";
+      }
+    })();
+  </script>
+</body>
+</html>
