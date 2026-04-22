@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sugestões de aposta — UFC Analytics</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260422v2') }}" />
+  <style>
+    .s-wrap { max-width: 1160px; margin: 0 auto; padding: 1.15rem; }
+    .s-head { margin-bottom: .9rem; }
+    .s-h1 { margin: .25rem 0 0; font-size: clamp(1.3rem, 2.2vw, 1.7rem); line-height: 1.2; }
+    .s-sub { margin: .45rem 0 0; color: var(--text-muted); max-width: 70ch; }
+
+    .s-panel {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: linear-gradient(165deg, rgba(255, 59, 59, 0.08), rgba(16, 22, 33, 0.68));
+      box-shadow: var(--shadow-card);
+      padding: .95rem;
+      margin-bottom: .9rem;
+    }
+    .s-toolbar { display: grid; grid-template-columns: minmax(260px,1fr) 180px 170px auto auto; gap: .6rem; align-items: end; }
+    .s-toolbar label { display: flex; flex-direction: column; gap: .32rem; font-size: .78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+    .s-select { min-height: 2.45rem; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text); padding: .4rem .6rem; }
+    .s-refresh { display: flex; align-items: center; gap: .4rem; color: var(--text-muted); font-size: .82rem; white-space: nowrap; padding-bottom: .45rem; }
+    .s-btn { min-width: 148px; }
+
+    .s-status { margin: 0 0 .8rem; color: var(--text-muted); min-height: 1.1rem; font-size: .92rem; }
+    .s-status strong { color: var(--text); }
+    .s-hero {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+      min-height: 220px;
+      margin-bottom: .9rem;
+      background: linear-gradient(165deg, rgba(255, 59, 59, 0.12), rgba(16, 22, 33, 0.72));
+      box-shadow: var(--shadow-card);
+    }
+    .s-hero-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      filter: brightness(.68);
+    }
+    .s-hero-bg::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.82));
+    }
+    .s-hero-inner {
+      position: relative;
+      z-index: 1;
+      padding: 1rem 1.1rem;
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: .55rem;
+    }
+    .s-hero-title { margin: 0; font-size: clamp(1.25rem, 2.8vw, 1.9rem); font-weight: 900; line-height: 1.2; }
+    .s-hero-meta { color: rgba(255,255,255,.82); font-size: .88rem; }
+    .s-hero-fight { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+    .s-hero-fighter { display: flex; align-items: center; gap: .4rem; font-weight: 700; }
+    .s-hero-fighter img { width: 40px; height: 40px; border-radius: 999px; object-fit: cover; border: 2px solid rgba(255,255,255,.28); background: rgba(255,255,255,.08); }
+    .s-hero-vs { opacity: .82; font-weight: 800; letter-spacing: .08em; }
+
+    .s-kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: .65rem; margin-bottom: .9rem; }
+    .s-kpi { border: 1px solid var(--border); border-radius: 12px; background: var(--bg-panel); padding: .6rem .75rem; }
+    .s-kpi-k { color: var(--text-muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+    .s-kpi-v { margin-top: .25rem; font-weight: 800; font-size: 1.15rem; color: var(--text); }
+
+    .s-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+    .s-card { border: 1px solid var(--border); border-radius: 14px; background: var(--bg-panel); box-shadow: var(--shadow-card); overflow: hidden; }
+    .s-card h2 { margin: 0; padding: .9rem 1rem; border-bottom: 1px solid var(--border); font-size: .95rem; }
+    .s-list { padding: .65rem .75rem .9rem; display: flex; flex-direction: column; gap: .6rem; }
+
+    .s-item { border: 1px solid rgba(255,255,255,.09); border-radius: 12px; padding: .65rem .75rem; background: rgba(255,255,255,.02); }
+    .s-top { display: flex; justify-content: space-between; gap: .6rem; align-items: center; }
+    .s-rank { display: inline-flex; align-items: center; justify-content: center; min-width: 1.8rem; height: 1.35rem; padding: 0 .4rem; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); font-size: .72rem; font-weight: 800; margin-right: .4rem; }
+    .s-name { font-weight: 800; }
+    .s-meta { color: var(--text-muted); font-size: .8rem; margin-top: .2rem; }
+
+    .s-badges { display: flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
+    .s-pill { border-radius: 999px; padding: .18rem .5rem; font-size: .72rem; border: 1px solid rgba(255,255,255,.12); }
+    .s-pill.safe { color: #86efac; border-color: rgba(46,204,113,.35); background: rgba(46,204,113,.12); }
+    .s-pill.risky { color: #fde68a; border-color: rgba(241,196,15,.35); background: rgba(241,196,15,.12); }
+    .s-pill.value { color: #c4b5fd; border-color: rgba(139,92,246,.35); background: rgba(139,92,246,.12); }
+    .s-pill.side { color: #fecaca; border-color: rgba(255,59,59,.35); background: rgba(255,59,59,.12); }
+
+    .s-kpis { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: .4rem .5rem; margin-top: .45rem; font-size: .78rem; color: var(--text-muted); }
+    .s-kpi-chip { padding: .3rem .45rem; border-radius: 8px; border: 1px solid rgba(255,255,255,.08); background: rgba(255,255,255,.02); }
+    .s-kpi-chip strong { color: var(--text); font-variant-numeric: tabular-nums; }
+    .s-bar-wrap { margin-top: .45rem; }
+    .s-bar-head { display: flex; justify-content: space-between; font-size: .74rem; color: var(--text-muted); margin-bottom: .24rem; }
+    .s-bar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+    .s-bar-fill { height: 100%; background: linear-gradient(90deg, rgba(255,59,59,.45), rgba(255,59,59,.85)); }
+    .s-empty { color: var(--text-muted); font-size: .86rem; padding: .8rem; border: 1px dashed rgba(255,255,255,.12); border-radius: 10px; background: rgba(255,255,255,.015); }
+    .s-winline { margin-top: .45rem; font-size: .8rem; color: rgba(255,255,255,.9); }
+    .s-winline strong { color: #fde68a; }
+    .s-methods { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .45rem; }
+    .s-method-pill {
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.03);
+      border-radius: 999px;
+      padding: .18rem .45rem;
+      font-size: .74rem;
+      color: var(--text-muted);
+    }
+    .s-method-pill strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
+    @media (max-width: 980px) {
+      .s-toolbar { grid-template-columns: 1fr 1fr; }
+      .s-btn { width: 100%; }
+      .s-kpi-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .s-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .s-toolbar { grid-template-columns: 1fr; }
+      .s-kpi-grid { grid-template-columns: 1fr; }
+      .s-kpis { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body class="auth-page auth-page--wide">
+  <div class="s-wrap">
+    <header class="s-head">
+      <a class="auth-back" href="/">← Início</a>
+      <h1 class="s-h1">Sugestões de aposta</h1>
+      <p class="s-sub">Ranqueamento automático do card inteiro com foco em custo-benefício e consistência entre modelo, Monte Carlo e gestão de banca.</p>
+    </header>
+
+    <section class="s-panel">
+      <div class="s-toolbar">
+        <label>Evento
+          <select id="eventSel" class="s-select"></select>
+        </label>
+        <label>Perfil
+          <select id="profileSel" class="s-select">
+            <option value="conservative">Conservador</option>
+            <option value="balanced" selected>Balanceado</option>
+            <option value="aggressive">Agressivo</option>
+          </select>
+        </label>
+        <label>Qtd. top picks
+          <select id="limitSel" class="s-select">
+            <option value="5">5</option>
+            <option value="8" selected>8</option>
+            <option value="10">10</option>
+            <option value="12">12</option>
+          </select>
+        </label>
+        <label class="s-refresh">
+          <input id="refresh" type="checkbox" />
+          Ignorar cache
+        </label>
+        <button id="btnRun" class="btn-primary s-btn">Gerar sugestões</button>
+      </div>
+    </section>
+
+    <p id="status" class="s-status"></p>
+    <section class="s-hero" id="eventHero" hidden>
+      <div class="s-hero-bg" id="eventHeroBg"></div>
+      <div class="s-hero-inner">
+        <h2 class="s-hero-title" id="eventHeroTitle"></h2>
+        <div class="s-hero-meta" id="eventHeroMeta"></div>
+        <div class="s-hero-fight" id="eventHeroFight"></div>
+      </div>
+    </section>
+
+    <section class="s-kpi-grid" aria-label="Resumo das sugestões">
+      <article class="s-kpi">
+        <div class="s-kpi-k">Candidatas</div>
+        <div class="s-kpi-v" id="kpiCandidates">—</div>
+      </article>
+      <article class="s-kpi">
+        <div class="s-kpi-k">Top picks</div>
+        <div class="s-kpi-v" id="kpiTop">—</div>
+      </article>
+      <article class="s-kpi">
+        <div class="s-kpi-k">Arriscadas boas</div>
+        <div class="s-kpi-v" id="kpiRisky">—</div>
+      </article>
+      <article class="s-kpi">
+        <div class="s-kpi-k">Perfil</div>
+        <div class="s-kpi-v" id="kpiProfile">—</div>
+      </article>
+    </section>
+
+    <div class="s-grid">
+      <section class="s-card">
+        <h2>Top picks recomendadas</h2>
+        <div id="topList" class="s-list"></div>
+      </section>
+      <section class="s-card">
+        <h2>Arriscadas que compensam</h2>
+        <div id="riskyList" class="s-list"></div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    function esc(v) { const d = document.createElement("div"); d.textContent = v == null ? "" : String(v); return d.innerHTML; }
+    function pct(x) { return (Number(x) * 100).toFixed(2) + "%"; }
+    function profileLabel(k) { return k === "conservative" ? "Conservador" : k === "aggressive" ? "Agressivo" : "Balanceado"; }
+
+    function rowHtml(p, idx) {
+      const riskClass = (p.risk_tier || "").toLowerCase() === "safe" ? "safe" : "risky";
+      const side = p.side === "red" ? "Vermelho" : "Azul";
+      const modelP = Math.max(0, Math.min(100, Number(p.model_prob || 0) * 100));
+      const rp = p.red_photo_url ? `/api/proxy-image?url=${encodeURIComponent(p.red_photo_url)}` : "";
+      const bp = p.blue_photo_url ? `/api/proxy-image?url=${encodeURIComponent(p.blue_photo_url)}` : "";
+      const winline =
+        p.predicted_winner && p.predicted_method
+          ? `Vitória provável: <strong>${esc(p.predicted_winner)}</strong> por <strong>${esc(p.predicted_method)}</strong>`
+          : "Vitória provável indisponível no momento.";
+      const wp = p.win_path_probs || {};
+      return `<article class="s-item">
+        <div class="s-top">
+          <div class="s-name"><span class="s-rank">#${idx + 1}</span>#${esc(p.fight_index)} · ${esc(p.fighter_name)}</div>
+          <div class="s-badges">
+            <span class="s-pill side">${esc(side)}</span>
+            <span class="s-pill ${riskClass}">${esc(p.risk_tier)}</span>
+            ${p.is_value_side ? '<span class="s-pill value">Value</span>' : ""}
+          </div>
+        </div>
+        <div class="s-meta">${esc(p.fight_label)} · ${esc(p.division || "—")}</div>
+        <div class="s-meta" style="margin-top:.35rem; display:flex; align-items:center; gap:.35rem;">
+          ${rp ? `<img src="${esc(rp)}" alt="" style="width:24px;height:24px;border-radius:999px;object-fit:cover;border:1px solid rgba(255,255,255,.2)">` : ""}
+          ${bp ? `<img src="${esc(bp)}" alt="" style="width:24px;height:24px;border-radius:999px;object-fit:cover;border:1px solid rgba(255,255,255,.2)">` : ""}
+        </div>
+        <div class="s-winline">${winline}</div>
+        <div class="s-methods">
+          <span class="s-method-pill">KO/TKO <strong>${esc(Number(wp.ko_tko || 0).toFixed(2))}%</strong></span>
+          <span class="s-method-pill">Decisão <strong>${esc(Number(wp.decisao || 0).toFixed(2))}%</strong></span>
+          <span class="s-method-pill">Finalização <strong>${esc(Number(wp.finalizacao || 0).toFixed(2))}%</strong></span>
+        </div>
+        <div class="s-kpis">
+          <div class="s-kpi-chip">Odd <strong>${esc(p.decimal_odds)}</strong></div>
+          <div class="s-kpi-chip">ROI esp. <strong>${esc(pct(p.expected_roi))}</strong></div>
+          <div class="s-kpi-chip">Retorno bruto <strong>${esc(pct(p.gross_upside))}</strong></div>
+          <div class="s-kpi-chip">Edge <strong>${esc(pct(p.edge_prob))}</strong></div>
+          <div class="s-kpi-chip">Modelo <strong>${esc(pct(p.model_prob))}</strong></div>
+          ${p.mc_prob != null ? `<div class="s-kpi-chip">MC <strong>${esc(pct(p.mc_prob))}</strong></div>` : ""}
+          ${p.phase7_stake != null ? `<div class="s-kpi-chip">Stake F7 <strong>${esc(p.phase7_stake)}</strong></div>` : ""}
+        </div>
+        <div class="s-bar-wrap">
+          <div class="s-bar-head"><span>Convicção do modelo</span><span>${modelP.toFixed(2)}%</span></div>
+          <div class="s-bar"><div class="s-bar-fill" style="width:${modelP}%"></div></div>
+        </div>
+      </article>`;
+    }
+
+    function renderList(el, arr, emptyMsg) {
+      if (!arr || !arr.length) {
+        el.innerHTML = `<article class="s-empty">${esc(emptyMsg)}</article>`;
+        return;
+      }
+      el.innerHTML = arr.map((x, i) => rowHtml(x, i)).join("");
+    }
+
+    function renderHero(data) {
+      const hero = $("eventHero");
+      const bg = $("eventHeroBg");
+      const title = $("eventHeroTitle");
+      const meta = $("eventHeroMeta");
+      const fight = $("eventHeroFight");
+      if (!hero || !bg || !title || !meta || !fight) return;
+
+      const heroImg = data.hero_image_url || "";
+      if (heroImg) {
+        bg.style.backgroundImage = `url(/api/proxy-image?url=${encodeURIComponent(heroImg)})`;
+      } else {
+        bg.style.backgroundImage = "";
+      }
+      title.textContent = data.event_title || "Evento UFC";
+      const when = data.event_starts_at ? new Date(data.event_starts_at).toLocaleString("pt-BR") : "";
+      meta.textContent = when || "Data/horário indisponíveis.";
+
+      const mf = data.main_fight_preview || {};
+      const red = mf.red_name || "";
+      const blue = mf.blue_name || "";
+      const rPhoto = mf.red_photo_url ? `/api/proxy-image?url=${encodeURIComponent(mf.red_photo_url)}` : "";
+      const bPhoto = mf.blue_photo_url ? `/api/proxy-image?url=${encodeURIComponent(mf.blue_photo_url)}` : "";
+      if (red && blue) {
+        fight.innerHTML = `
+          <span class="s-hero-fighter">${rPhoto ? `<img src="${esc(rPhoto)}" alt="">` : ""}${esc(red)}</span>
+          <span class="s-hero-vs">VS</span>
+          <span class="s-hero-fighter">${bPhoto ? `<img src="${esc(bPhoto)}" alt="">` : ""}${esc(blue)}</span>
+        `;
+      } else {
+        fight.innerHTML = "";
+      }
+      hero.hidden = false;
+    }
+
+    async function loadEvents() {
+      const sel = $("eventSel");
+      sel.innerHTML = "<option>Carregando…</option>";
+      const res = await fetch("/api/ufc/events", { headers: { Accept: "application/json" } });
+      const data = await res.json();
+      const evs = data.future_events || data.events || [];
+      if (!evs.length) {
+        sel.innerHTML = `<option value="{{ default_url|e }}">Evento padrão</option>`;
+        return;
+      }
+      sel.innerHTML = evs.map((e) => `<option value="${esc(e.url)}">${esc(e.title)}</option>`).join("");
+      if (data.next_future && data.next_future.url) sel.value = data.next_future.url;
+    }
+
+    async function run() {
+      const st = $("status");
+      const top = $("topList");
+      const risky = $("riskyList");
+      const url = $("eventSel").value || "{{ default_url|e }}";
+      const refresh = $("refresh").checked ? "1" : "0";
+      const profile = $("profileSel").value || "balanced";
+      const limit = $("limitSel").value || "8";
+
+      st.textContent = "Analisando card e calculando sugestões…";
+      $("kpiCandidates").textContent = "—";
+      $("kpiTop").textContent = "—";
+      $("kpiRisky").textContent = "—";
+      $("kpiProfile").textContent = profileLabel(profile);
+
+      try {
+        const q =
+          "/api/bet/suggestions?url=" +
+          encodeURIComponent(url) +
+          "&refresh=" +
+          refresh +
+          "&profile=" +
+          encodeURIComponent(profile) +
+          "&limit=" +
+          encodeURIComponent(limit);
+        const res = await fetch(q, { headers: { Accept: "application/json" } });
+        const data = await res.json();
+        if (!data.ok) throw new Error((data.errors && data.errors[0]) || "Falha na análise");
+
+        const pf = profileLabel(data.profile || profile);
+        st.innerHTML = `<strong>${esc(data.event_title || "Evento")}</strong> · perfil ${esc(pf)} · ${esc(data.total_candidates)} candidatas.`;
+        renderHero(data);
+        renderList(top, data.top_picks, "Nenhuma pick recomendada nos filtros atuais.");
+        renderList(risky, data.risky_value_picks, "Sem arriscadas que batam o critério neste momento.");
+
+        $("kpiCandidates").textContent = String(data.total_candidates || 0);
+        $("kpiTop").textContent = String((data.top_picks || []).length);
+        $("kpiRisky").textContent = String((data.risky_value_picks || []).length);
+        $("kpiProfile").textContent = pf;
+      } catch (e) {
+        st.textContent = e.message || "Erro ao gerar sugestões.";
+        renderList(top, [], "Erro ao carregar.");
+        renderList(risky, [], "Erro ao carregar.");
+      }
+    }
+
+    (async function boot() {
+      await loadEvents();
+      $("btnRun").addEventListener("click", run);
+      $("profileSel").addEventListener("change", run);
+      $("limitSel").addEventListener("change", run);
+      run();
+    })();
+  </script>
+</body>
+</html>

@@ -1408,6 +1408,22 @@ def _fighter_brief(f: FighterProfile) -> dict[str, Any]:
     }
 
 
+def _fallback_risk_tier_from_probs(p_red: float) -> str:
+    """
+    Fallback de tier para UI/apostas quando o modelo avançado indisponível.
+    Regras alinhadas ao classificador legado (SAFE/RISKY/SKIP).
+    """
+    max_p = max(p_red, 1.0 - p_red)
+    edge_away_from_coin = abs(p_red - 0.5)
+    if max_p < 0.60:
+        return "SKIP"
+    if edge_away_from_coin < 0.08:
+        return "SKIP"
+    if max_p < 0.68:
+        return "RISKY"
+    return "SAFE"
+
+
 def analyze_event_json(
     event_url: str,
     *,
@@ -1538,6 +1554,7 @@ def analyze_event_json(
                 row["prob_red_pct"] = round(100.0 * p_red, 2)
                 row["prob_blue_pct"] = round(100.0 * p_blue, 2)
                 row["favorite_corner"] = "red" if fav_is_red else "blue"
+                row["risk_tier"] = _fallback_risk_tier_from_probs(p_red)
                 row["methods_pct"] = {
                     "ko_tko": round(100.0 * pk, 2),
                     "decisao": round(100.0 * pd, 2),
@@ -1595,6 +1612,11 @@ def analyze_event_json(
                             )
 
                             ap = row["advanced_prediction"]
+                            if isinstance(ap, dict):
+                                ap_risk = ap.get("risk") if isinstance(ap.get("risk"), dict) else {}
+                                ap_tier = ap_risk.get("tier")
+                                if isinstance(ap_tier, str) and ap_tier:
+                                    row["risk_tier"] = ap_tier
                             if isinstance(ap, dict) and "error" not in ap and ap.get("ok") is not False:
                                 wm = ap.get("weighted_model") or {}
                                 ft = wm.get("feature_terms_vector") or [0.0, 0.0, 0.0, 0.0]

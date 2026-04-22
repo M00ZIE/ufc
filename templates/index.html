@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UFC Analytics — Análise &amp; apostas demo</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260422v2') }}" />
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
   <script src="{{ url_for('static', filename='main.js') }}" defer></script>
 </head>
@@ -26,6 +26,10 @@
         <span class="sidebar-ico" aria-hidden="true">✓</span>
         <span>Resultados</span>
       </div>
+      <a class="sidebar-link" href="/suggestions" data-tip="Sugestões de aposta" aria-label="Sugestões de aposta">
+        <span class="sidebar-ico" aria-hidden="true">💡</span>
+        <span>Sugestões</span>
+      </a>
     </nav>
   </aside>
 
@@ -36,6 +40,7 @@
       <nav class="topbar-nav">
         <a href="/login" id="topbarLogin">Entrar</a>
         <a href="/register" id="topbarReg">Cadastro</a>
+        <a href="/suggestions">Sugestões</a>
         <a href="/bets">Apostas</a>
       </nav>
       <div class="topbar-end">
@@ -190,11 +195,14 @@
     let carouselEvents = [];
     let carouselIndex = 0;
 
-    async function fetchJsonUrl(url) {
+    async function fetchJsonUrl(url, timeoutMs = 20000) {
+      const ctrl = new AbortController();
+      const t = window.setTimeout(() => ctrl.abort(), timeoutMs);
       const res = await fetch(url, {
         headers: { Accept: "application/json" },
         credentials: "same-origin",
-      });
+        signal: ctrl.signal,
+      }).finally(() => window.clearTimeout(t));
       const ct = (res.headers.get("content-type") || "").toLowerCase();
       const text = await res.text();
       if (!ct.includes("application/json")) {
@@ -1263,17 +1271,31 @@
       }
       try {
         const url = "/api/ufc/events" + (forceRefresh ? "?refresh=1" : "");
-        const data = await fetchJsonUrl(url);
+        const data = await fetchJsonUrl(url, forceRefresh ? 30000 : 15000);
         if (!data.ok) {
-          carouselEvents = [];
-          carouselIndex = 0;
-          if (hint) hint.textContent = (data.errors && data.errors[0]) || "Lista indisponível.";
+          const fallbackUrl = eventUrlDefault();
+          if (fallbackUrl) {
+            carouselEvents = [{ title: "Evento padrão", url: fallbackUrl }];
+            carouselIndex = 0;
+            if (hint) hint.textContent = "Lista indisponível no momento; usando evento padrão.";
+          } else {
+            carouselEvents = [];
+            carouselIndex = 0;
+            if (hint) hint.textContent = (data.errors && data.errors[0]) || "Lista indisponível.";
+          }
           return;
         }
         if (!Array.isArray(data.future_events) || !data.future_events.length) {
-          carouselEvents = [];
-          carouselIndex = 0;
-          if (hint) hint.textContent = "Nenhum evento futuro na lista oficial.";
+          const fallbackUrl = eventUrlDefault();
+          if (fallbackUrl) {
+            carouselEvents = [{ title: "Evento padrão", url: fallbackUrl }];
+            carouselIndex = 0;
+            if (hint) hint.textContent = "Sem eventos futuros na lista; usando evento padrão.";
+          } else {
+            carouselEvents = [];
+            carouselIndex = 0;
+            if (hint) hint.textContent = "Nenhum evento futuro na lista oficial.";
+          }
           return;
         }
         carouselEvents = data.future_events.map((e) => ({ title: e.title, url: e.url }));
@@ -1290,9 +1312,16 @@
         }
         updateCarouselHint();
       } catch (e) {
-        carouselEvents = [];
-        carouselIndex = 0;
-        if (hint) hint.textContent = e.message || "Erro ao listar eventos.";
+        const fallbackUrl = eventUrlDefault();
+        if (fallbackUrl) {
+          carouselEvents = [{ title: "Evento padrão", url: fallbackUrl }];
+          carouselIndex = 0;
+          if (hint) hint.textContent = "Falha/timeout ao listar eventos; usando evento padrão.";
+        } else {
+          carouselEvents = [];
+          carouselIndex = 0;
+          if (hint) hint.textContent = e.message || "Erro ao listar eventos.";
+        }
       } finally {
         void loadHeroMeta(getAnalyzeUrl());
       }

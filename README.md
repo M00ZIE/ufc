@@ -1,4 +1,4 @@
-# UFC Analytics
+# UFC Analytics 🥊📊
 
 Plataforma web **educacional** em **Python / Flask** focada **só em UFC**: lê o **site oficial** (HTML público), calcula probabilidades heurísticas e um **modelo MMA ponderado** (`mma_predict`), lista **eventos recentes** (scraping leve com cache) e oferece **apostas simuladas** com créditos fictícios (SQLite + sessão).
 
@@ -6,7 +6,7 @@ Plataforma web **educacional** em **Python / Flask** focada **só em UFC**: lê 
 
 ---
 
-## Sumário
+## 📚 Sumário
 
 - [Visão rápida](#visão-rápida)
 - [Funcionalidades](#funcionalidades)
@@ -29,7 +29,7 @@ Plataforma web **educacional** em **Python / Flask** focada **só em UFC**: lê 
 
 ---
 
-## Funcionalidades
+## ✨ Funcionalidades
 
 | Área | Descrição |
 |------|-----------|
@@ -43,7 +43,7 @@ Plataforma web **educacional** em **Python / Flask** focada **só em UFC**: lê 
 
 ---
 
-## Visão rápida
+## 🚀 Visão rápida
 
 - API e frontend para análise de cards UFC em uma única aplicação Flask.
 - Pipeline de previsão com fases 3→7, Monte Carlo, risco e sugestão de stake.
@@ -52,7 +52,7 @@ Plataforma web **educacional** em **Python / Flask** focada **só em UFC**: lê 
 
 ---
 
-## Stack e dependências
+## 🧰 Stack e dependências
 
 | Pacote | Uso |
 |--------|-----|
@@ -65,7 +65,7 @@ Arquivo: `requirements.txt`.
 
 ---
 
-## Estrutura do repositório
+## 🗂️ Estrutura do repositório
 
 ```
 ufc/
@@ -89,7 +89,7 @@ Pastas geradas em runtime (podem ir no `.gitignore`): `.ufc_html_cache/` (HTML d
 
 ---
 
-## Início rápido (local)
+## ⚡ Início rápido (local)
 
 Pré-requisitos:
 
@@ -113,7 +113,7 @@ http://127.0.0.1:5000/?noload=1
 
 ---
 
-## Interface web
+## 🖥️ Interface web
 
 | Rota | Conteúdo |
 |------|----------|
@@ -132,7 +132,7 @@ http://127.0.0.1:5000/?noload=1
 
 ---
 
-## API HTTP
+## 🔌 API HTTP
 
 Rotas principais (prefixos exatos abaixo).
 
@@ -179,7 +179,7 @@ curl "http://127.0.0.1:5000/api/bet/suggestions?url=https://www.ufc.com.br/event
 
 ---
 
-## Análise de eventos (`ufc_event_analysis`)
+## 🔎 Análise de eventos (`ufc_event_analysis`)
 
 - Faz **fetch** do HTML do evento (URLs permitidas: domínios UFC oficiais — ver `sports/ufc_urls.py`).
 - **Cache** em disco (arquivos hash por URL) com TTL configurável no analisador; parâmetro `refresh` força novo download.
@@ -191,14 +191,14 @@ Constante **`DEFAULT_URL`**: evento padrão quando não se passa URL (no topo de
 
 ---
 
-## Modelo ponderado (`mma_predict`)
+## 🧠 Modelo ponderado (`mma_predict`)
 
 Modelo **independente** do logit legado: combina diferenças **striking**, **grappling**, **forma recente**, **físico/rank no card**, **consistência** com pesos fixos (ex.: 0,3 / 0,3 / 0,2 / 0,1 / 0,1), passa por **logística** e devolve probabilidades vermelho/azul.
 
 - **Risco**: **SAFE**, **RISKY** ou **SKIP** (mercado fechado nas apostas da UI quando SKIP).
 - Integrado em `predictor.py`; exposto no JSON como `weighted_model`, `risk`, `value_bet` opcional.
 
-### Fases da análise avançada (3 a 7)
+### 🧪 Fases da análise avançada (3 a 7)
 
 - **Fase 3 (`phase3_model`)**: mistura sinais de **Elo**, componente **Bayesiano**, probabilidade do modelo e concordância/incerteza para obter uma `final_prob`.
 - **Fase 4 (`phase4_model`)**: **meta-ensemble adaptativo** por contexto/regime/ROI (`ensemble_weights`, `regime`, `roi_context`) e threshold dinâmico de value.
@@ -206,13 +206,13 @@ Modelo **independente** do logit legado: combina diferenças **striking**, **gra
 - **Fase 6 (`phase6_adversarial`)**: stress test adversarial (`adversarial_hit_rate`, `worst_case_roi`, `vulnerability_index`) para medir robustez.
 - **Fase 7 (`phase7_bankroll`)**: controle de banca e orçamento de risco, podendo reduzir stake recomendado para preservar equity.
 
-### Monte Carlo e volatilidade
+### 🎲 Monte Carlo e volatilidade
 
 - `monte_carlo_prob`: probabilidade final após simulação sobre a probabilidade base.
 - `volatility`: sinal de instabilidade da luta/modelo, usado junto da classificação de risco.
 - Fatores de política (fase 5) e adversarial (fase 6) influenciam o ajuste do Monte Carlo.
 
-### Linha de comando (batch)
+### 🖱️ Linha de comando (batch)
 
 Arquivo com uma URL de evento por linha (`#` comenta a linha):
 
@@ -222,7 +222,7 @@ python -m mma_predict.batch_events --urls-file eventos.txt --out ufc_batch.jsonl
 
 ---
 
-## Lista de eventos (`ufc_events`)
+## 📅 Lista de eventos (`ufc_events`)
 
 - Fonte: **`https://www.ufc.com.br/events`**.
 - Parse de cards (título em **`h3`** + link `/event/...`), com fallback para links soltos.
@@ -232,7 +232,7 @@ python -m mma_predict.batch_events --urls-file eventos.txt --out ufc_batch.jsonl
 
 ---
 
-## Apostas demo (`betting/`)
+## 💰 Apostas demo (`betting/`)
 
 - **Banco de dados**: SQLite (padrão `instance/betting.sqlite3`, configurável com `BETTING_DB_PATH`).
 - **Odds**: derivadas das probabilidades do modelo (ponderado quando existe) com **vig** — SAFE **1.08**, RISKY **1.12**; **SKIP** não permite aposta na regra de negócio.
@@ -241,7 +241,7 @@ python -m mma_predict.batch_events --urls-file eventos.txt --out ufc_batch.jsonl
 
 ---
 
-## Cache e arquivos locais
+## 🧱 Cache e arquivos locais
 
 | Caminho | Conteúdo |
 |---------|----------|
@@ -250,7 +250,7 @@ python -m mma_predict.batch_events --urls-file eventos.txt --out ufc_batch.jsonl
 
 ---
 
-## Testes automatizados
+## ✅ Testes automatizados
 
 ```bash
 python -m unittest discover -s tests -v
@@ -260,7 +260,7 @@ Inclui testes de allowlist de URLs, registro de esportes, odds, `mma_predict`, p
 
 ---
 
-## Variáveis de ambiente
+## 🌱 Variáveis de ambiente
 
 | Variável | Função |
 |----------|--------|
@@ -272,7 +272,7 @@ Inclui testes de allowlist de URLs, registro de esportes, odds, `mma_predict`, p
 
 ---
 
-## Deploy (Vercel)
+## ☁️ Deploy (Vercel)
 
 - Configure o projeto para build Python/Flask normalmente.
 - Garanta que os assets estáticos estejam atualizados em `public/static` (via script de preparo, quando aplicável).
@@ -281,7 +281,7 @@ Inclui testes de allowlist de URLs, registro de esportes, odds, `mma_predict`, p
 
 ---
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
 - **`readonly database` em produção**: valide fallback para diretórios graváveis (`/tmp`) no módulo de apostas e no módulo de aprendizagem.
 - **CSS antigo em deploy**: gere/sincronize estáticos e use versionamento de asset para cache busting.
@@ -290,7 +290,7 @@ Inclui testes de allowlist de URLs, registro de esportes, odds, `mma_predict`, p
 
 ---
 
-## Ideias de extensão
+## 🔮 Ideias de extensão
 
 - Outras fontes de dados (sempre respeitando termos legais).
 - Treinar modelos a partir de `mma_predict/data_collection.py` ou histórico.
@@ -298,6 +298,6 @@ Inclui testes de allowlist de URLs, registro de esportes, odds, `mma_predict`, p
 
 ---
 
-## Aviso legal
+## ⚖️ Aviso legal
 
 Uso **educacional**. Não há garantia de acerto nas previsões; não use para aposta com dinheiro real. **UFC** e marcas relacionadas são de seus titulares — este projeto **não** é afiliado à UFC.

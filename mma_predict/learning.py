@@ -7,11 +7,13 @@ Persistência: SQLite em ``data/mma_learning/`` (ou ``MMA_LEARNING_DATA_DIR``).
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
 import sqlite3
 import threading
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -35,13 +37,38 @@ _lock = threading.Lock()
 DEFAULT_WEIGHTS: tuple[float, float, float, float] = (0.35, 0.35, 0.20, 0.10)
 
 
+def _dir_is_writable(path: Path) -> bool:
+    probe = path / ".write_probe"
+    try:
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
 def learning_data_dir() -> Path:
     raw = os.environ.get("MMA_LEARNING_DATA_DIR")
     if raw:
         d = Path(raw)
     else:
         d = Path(__file__).resolve().parent.parent / "data" / "mma_learning"
-    d.mkdir(parents=True, exist_ok=True)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        # Serverless (Vercel): código é somente leitura fora de /tmp.
+        if exc.errno not in (errno.EROFS, errno.EACCES):
+            raise
+        d = Path(tempfile.gettempdir()) / "ufc_mma_learning"
+        d.mkdir(parents=True, exist_ok=True)
+        os.environ["MMA_LEARNING_DATA_DIR"] = str(d)
+        return d
+
+    # Mesmo quando mkdir não falha, o path pode existir em modo read-only.
+    if not _dir_is_writable(d):
+        d = Path(tempfile.gettempdir()) / "ufc_mma_learning"
+        d.mkdir(parents=True, exist_ok=True)
+        os.environ["MMA_LEARNING_DATA_DIR"] = str(d)
     return d
 
 

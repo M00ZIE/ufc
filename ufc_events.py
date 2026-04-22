@@ -4,9 +4,10 @@ Lista de eventos UFC recentes (ufc.com.br/events) com cache em disco.
 
 from __future__ import annotations
 
+import os
 import re
 import time
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urljoin, urlparse
@@ -15,10 +16,6 @@ import requests
 from bs4 import BeautifulSoup
 
 EVENTS_LIST_URL = "https://www.ufc.com.br/events"
-
-# Após meia-noite, se o hero cai no dia anterior no calendário: manter só umas ~22h
-# (noite de lutas), para não confundir com evento de 24h+ já encerrado.
-_YESTERDAY_EVENT_GRACE_SECONDS = 22 * 3600
 
 _MONTH_SLUG = {
     "january": 1,
@@ -60,12 +57,11 @@ def parse_date_from_event_url(url: str) -> Optional[date]:
 
 def list_future_events_ordered(events: list[dict[str, Any]], *, today: Optional[date] = None) -> list[dict[str, Any]]:
     """
-    Lista só eventos futuros: data no URL >= hoje, ou exatamente ontem (noite de lutas / fusos);
+    Lista só eventos futuros: data no URL >= hoje;
     depois eventos sem data no slug (ex.: ufc-327), na ordem do site.
-    URLs com data antes de ontem são ignoradas.
+    URLs com data anterior a hoje são ignoradas.
     """
     today = today or date.today()
-    yesterday = today - timedelta(days=1)
     dated: list[tuple[date, int, dict[str, Any]]] = []
     undated: list[dict[str, Any]] = []
     for i, e in enumerate(events):
@@ -73,7 +69,7 @@ def list_future_events_ordered(events: list[dict[str, Any]], *, today: Optional[
         d = parse_date_from_event_url(u)
         if d is None:
             undated.append(e)
-        elif d >= today or d == yesterday:
+        elif d >= today:
             dated.append((d, i, e))
     dated.sort(key=lambda x: (x[0].toordinal(), x[1]))
     return [x[2] for x in dated] + undated
@@ -81,20 +77,21 @@ def list_future_events_ordered(events: list[dict[str, Any]], *, today: Optional[
 
 def select_next_future_event(events: list[dict[str, Any]], *, today: Optional[date] = None) -> Optional[dict[str, Any]]:
     """
-    Escolhe o próximo evento: data no URL >= hoje ou ontem, ou sem data (lista já ordenada).
+    Escolhe o próximo evento priorizando datas explícitas >= hoje.
+    Eventos sem data no slug ficam como fallback.
     """
     if not events:
         return None
     today = today or date.today()
-    yesterday = today - timedelta(days=1)
     candidates: list[tuple[tuple[int, int, int], dict[str, Any]]] = []
     for i, e in enumerate(events):
         u = (e.get("url") or "").strip()
         d = parse_date_from_event_url(u)
         if d is None:
-            candidates.append(((0, i, 0), e))
-        elif d >= today or d == yesterday:
-            candidates.append(((1, d.toordinal(), i), e))
+            # Sem data no slug: entra depois de eventos datados.
+            candidates.append(((1, i, 0), e))
+        elif d >= today:
+            candidates.append(((0, d.toordinal(), i), e))
     if not candidates:
         return None
     candidates.sort(key=lambda x: x[0])
@@ -167,7 +164,7 @@ def _drop_past_events_by_hero_time(
 ) -> list[dict[str, Any]]:
     """
     Remove eventos já encerrados (hero no passado),     exceto:
-    mesmo dia local que o horário do hero; ou ontem + início há até ~22h (noite de lutas / fusos).
+    mesmo dia local que o horário do hero.
     Sem timestamp no HTML: mantém; com falha de fetch: mantém.
     """
     from ufc_event_analysis import extract_event_hero_timestamp_unix, fetch_html
@@ -200,16 +197,8 @@ def _drop_past_events_by_hero_time(
                 event_day = date.fromtimestamp(ts)
             except (ValueError, OSError):
                 event_day = None
-            yesterday = today - timedelta(days=1)
-            # Mesmo dia local, ou ontem com início há pouco (meia-noite / longas noites de UFC).
+            # Mesmo dia local: mantém enquanto o evento ainda pode estar ocorrendo.
             if event_day is not None and event_day >= today:
-                kept.append(e)
-                continue
-            if (
-                event_day is not None
-                and event_day == yesterday
-                and started_ago <= _YESTERDAY_EVENT_GRACE_SECONDS
-            ):
                 kept.append(e)
                 continue
             continue
@@ -263,12 +252,17 @@ def fetch_events_list(
             "next_future": None,
         }
     future_ordered = list_future_events_ordered(events)
-    future_ordered = _drop_past_events_by_hero_time(
-        future_ordered,
-        session,
-        cache_dir=cache_dir,
-        ttl=ttl,
-    )
+    # Em serverless (Vercel), evitar N requests extras por evento
+    # no bootstrap da home para não congelar a UI por muito tempo.
+    # A filtragem por data no slug já remove eventos antigos na maior parte.
+    on_vercel = bool(os.environ.get("VERCEL"))
+    if not on_vercel:
+        future_ordered = _drop_past_events_by_hero_time(
+            future_ordered,
+            session,
+            cache_dir=cache_dir,
+            ttl=ttl,
+        )
     nxt = select_next_future_event(future_ordered) if future_ordered else None
     return {
         "ok": True,

@@ -23,7 +23,7 @@
   function tierFromFight(f) {
     const ap = f && f.advanced_prediction;
     const r = ap && ap.risk;
-    return (r && r.tier) || "—";
+    return (r && r.tier) || (f && f.risk_tier) || "—";
   }
 
   function buildRows(fights) {

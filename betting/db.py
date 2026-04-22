@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import errno
+import os
 import sqlite3
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -76,8 +79,22 @@ CREATE INDEX IF NOT EXISTS idx_parlay_status ON parlay_bets(status);
 
 
 def default_db_path(root: Path) -> Path:
+    # Em ambiente serverless (Vercel), somente /tmp é gravável.
+    if os.environ.get("VERCEL"):
+        tmp_instance = Path(tempfile.gettempdir()) / "ufc_instance"
+        tmp_instance.mkdir(parents=True, exist_ok=True)
+        return tmp_instance / "betting.sqlite3"
+
     inst = root / "instance"
-    inst.mkdir(parents=True, exist_ok=True)
+    try:
+        inst.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        # Fallback seguro para ambientes com filesystem read-only.
+        if exc.errno in (errno.EROFS, errno.EACCES):
+            tmp_instance = Path(tempfile.gettempdir()) / "ufc_instance"
+            tmp_instance.mkdir(parents=True, exist_ok=True)
+            return tmp_instance / "betting.sqlite3"
+        raise
     return inst / "betting.sqlite3"
 
 

@@ -23,6 +23,7 @@ from werkzeug.exceptions import HTTPException
 from admin_blueprint import admin_bp
 from betting import init_betting
 from betting.db import connect, init_schema
+from betting.odds_math import extract_probs_from_fight_row, odds_pair_from_probs_vig
 from betting.service import get_user
 from iptv import IptvError, M3UCache, RateLimiter, fetch_m3u_parse_streaming, maybe_github_raw, playlist_candidate_urls, probe_url
 from sports import DEFAULT_SPORT, get_analyzer, list_sport_ids
@@ -191,6 +192,188 @@ def _current_user_from_db() -> dict[str, Any] | None:
         conn.close()
 
 
+def _build_bet_suggestions(
+    analysis: dict[str, Any],
+    *,
+    profile: str = "balanced",
+    top_limit: int = 8,
+    risky_limit: int = 5,
+) -> dict[str, Any]:
+    profile_key = (profile or "balanced").strip().lower()
+    cfg_map = {
+        "conservative": {
+            "safe_min_prob": 0.58,
+            "risky_min_prob": 0.56,
+            "risky_min_odds": 1.75,
+            "safe_bonus": 8.0,
+            "risky_bonus": 0.5,
+        },
+        "balanced": {
+            "safe_min_prob": 0.55,
+            "risky_min_prob": 0.50,
+            "risky_min_odds": 1.55,
+            "safe_bonus": 6.0,
+            "risky_bonus": 2.0,
+        },
+        "aggressive": {
+            "safe_min_prob": 0.52,
+            "risky_min_prob": 0.47,
+            "risky_min_odds": 1.45,
+            "safe_bonus": 4.0,
+            "risky_bonus": 4.5,
+        },
+    }
+    cfg = cfg_map.get(profile_key, cfg_map["balanced"])
+    top_n = max(3, min(20, int(top_limit)))
+    risky_n = max(0, min(10, int(risky_limit)))
+
+    fights = analysis.get("fights") if isinstance(analysis.get("fights"), list) else []
+    picks: list[dict[str, Any]] = []
+
+    for idx, f in enumerate(fights, start=1):
+        if not isinstance(f, dict):
+            continue
+        if f.get("error"):
+            continue
+        red = f.get("red") if isinstance(f.get("red"), dict) else {}
+        blue = f.get("blue") if isinstance(f.get("blue"), dict) else {}
+        if not red.get("name") or not blue.get("name"):
+            continue
+
+        pr, pb, tier_from_ap = extract_probs_from_fight_row(f)
+        risk_tier = tier_from_ap or f.get("risk_tier")
+        odds = odds_pair_from_probs_vig(pr, pb, risk_tier)
+        if odds.get("betting_blocked"):
+            continue
+
+        ap = f.get("advanced_prediction") if isinstance(f.get("advanced_prediction"), dict) else {}
+        value_detail = ap.get("value_bet_detail") if isinstance(ap.get("value_bet_detail"), dict) else {}
+        phase7 = ap.get("phase7_bankroll") if isinstance(ap.get("phase7_bankroll"), dict) else {}
+        mc_red_raw = ap.get("monte_carlo_prob")
+        mc_red = float(mc_red_raw) if isinstance(mc_red_raw, (float, int)) else None
+        rec_stake_raw = phase7.get("recommended_stake")
+        rec_stake = float(rec_stake_raw) if isinstance(rec_stake_raw, (float, int)) else 0.0
+
+        for side, model_prob, dec in (
+            ("red", float(pr), odds.get("decimal_odds_red")),
+            ("blue", float(pb), odds.get("decimal_odds_blue")),
+        ):
+            if dec is None:
+                continue
+            decimal_odds = float(dec)
+            implied_prob = 1.0 / decimal_odds
+            edge_prob = model_prob - implied_prob
+            expected_roi = model_prob * decimal_odds - 1.0
+            gross_upside = model_prob * max(0.0, decimal_odds - 1.0)
+            mc_prob = None
+            if mc_red is not None:
+                mc_prob = mc_red if side == "red" else 1.0 - mc_red
+            mc_gap = abs(model_prob - mc_prob) if mc_prob is not None else None
+
+            score = model_prob * 70.0 + gross_upside * 26.0
+            if risk_tier == "SAFE":
+                score += float(cfg["safe_bonus"])
+            elif risk_tier == "RISKY":
+                score += float(cfg["risky_bonus"])
+            if mc_gap is not None:
+                score += 3.0 if mc_gap <= 0.06 else -2.0
+            if value_detail.get("side") == side:
+                score += 4.0
+                if isinstance(value_detail.get("edge_pct"), (float, int)):
+                    score += min(4.0, float(value_detail["edge_pct"]) / 2.0)
+            if rec_stake > 0:
+                score += 2.0
+
+            name = red.get("name") if side == "red" else blue.get("name")
+            methods = f.get("methods_pct") if isinstance(f.get("methods_pct"), dict) else {}
+            fav_methods = (
+                f.get("if_favorite_wins_pct")
+                if isinstance(f.get("if_favorite_wins_pct"), dict)
+                else {}
+            )
+            predicted_winner = f.get("predicted_winner")
+            predicted_method = f.get("predicted_method")
+            favorite_corner = f.get("favorite_corner")
+            is_favorite_side = (
+                (side == "red" and favorite_corner == "red")
+                or (side == "blue" and favorite_corner == "blue")
+            )
+            path_source = fav_methods if is_favorite_side and fav_methods else methods
+            ko = float(path_source.get("ko_tko") or 0.0)
+            dec = float(path_source.get("decisao") or 0.0)
+            sub = float(path_source.get("finalizacao") or 0.0)
+
+            picks.append(
+                {
+                    "fight_index": int(f.get("index") or idx),
+                    "fight_label": f"{red.get('name')} x {blue.get('name')}",
+                    "division": f.get("division") or "",
+                    "side": side,
+                    "fighter_name": name,
+                    "risk_tier": risk_tier or "—",
+                    "model_prob": round(model_prob, 4),
+                    "implied_prob": round(implied_prob, 4),
+                    "edge_prob": round(edge_prob, 4),
+                    "expected_roi": round(expected_roi, 4),
+                    "gross_upside": round(gross_upside, 4),
+                    "decimal_odds": round(decimal_odds, 2),
+                    "mc_prob": round(mc_prob, 4) if mc_prob is not None else None,
+                    "mc_gap": round(mc_gap, 4) if mc_gap is not None else None,
+                    "phase7_stake": round(rec_stake, 4) if rec_stake > 0 else None,
+                    "score": round(score, 2),
+                    "is_value_side": value_detail.get("side") == side,
+                    "red_name": red.get("name"),
+                    "blue_name": blue.get("name"),
+                    "red_photo_url": red.get("photo_url"),
+                    "blue_photo_url": blue.get("photo_url"),
+                    "predicted_winner": predicted_winner,
+                    "predicted_method": predicted_method,
+                    "win_path_probs": {
+                        "ko_tko": round(ko, 2),
+                        "decisao": round(dec, 2),
+                        "finalizacao": round(sub, 2),
+                    },
+                }
+            )
+
+    filtered: list[dict[str, Any]] = []
+    for p in picks:
+        if p["risk_tier"] == "SAFE" and p["model_prob"] >= float(cfg["safe_min_prob"]):
+            filtered.append(p)
+            continue
+        if (
+            p["risk_tier"] == "RISKY"
+            and p["model_prob"] >= float(cfg["risky_min_prob"])
+            and p["decimal_odds"] >= float(cfg["risky_min_odds"])
+        ):
+            filtered.append(p)
+            continue
+    picks = filtered
+    picks.sort(key=lambda x: x["score"], reverse=True)
+
+    top_picks = picks[:top_n]
+    risky_value = [
+        p
+        for p in picks
+        if p["risk_tier"] == "RISKY"
+        and p["model_prob"] >= max(0.5, float(cfg["risky_min_prob"]))
+        and p["decimal_odds"] >= max(1.7, float(cfg["risky_min_odds"]))
+    ][:risky_n]
+
+    return {
+        "ok": True,
+        "profile": profile_key,
+        "event_url": analysis.get("event_url"),
+        "event_title": analysis.get("event_title"),
+        "event_starts_at": analysis.get("event_starts_at"),
+        "hero_image_url": analysis.get("hero_image_url"),
+        "main_fight_preview": analysis.get("main_fight_preview"),
+        "total_candidates": len(picks),
+        "top_picks": top_picks,
+        "risky_value_picks": risky_value,
+    }
+
+
 @app.route("/")
 def index():
     return render_template("index.html", default_url=DEFAULT_URL)
@@ -214,6 +397,11 @@ def page_bets():
     return render_template("bets.html")
 
 
+@app.route("/suggestions")
+def page_suggestions():
+    return render_template("suggestions.html", default_url=DEFAULT_URL)
+
+
 @app.route("/api/sports")
 def api_sports():
     """Lista analisadores registrados (UFC)."""
@@ -227,6 +415,49 @@ def api_ufc_events():
     sess = requests.Session()
     data = fetch_events_list(sess, cache_dir=_cache_dir(), refresh=refresh)
     return jsonify(data)
+
+
+@app.route("/api/bet/suggestions")
+def api_bet_suggestions():
+    url = (request.args.get("url") or DEFAULT_URL).strip()
+    refresh = request.args.get("refresh", "0") == "1"
+    profile = (request.args.get("profile") or "balanced").strip().lower()
+    if profile not in {"conservative", "balanced", "aggressive"}:
+        profile = "balanced"
+    try:
+        limit = int(request.args.get("limit", "8"))
+    except ValueError:
+        limit = 8
+    try:
+        risky_limit = int(request.args.get("risky_limit", "5"))
+    except ValueError:
+        risky_limit = 5
+    if not url:
+        return jsonify({"ok": False, "errors": ["URL vazia"]}), 400
+    try:
+        analyzer = get_analyzer(DEFAULT_SPORT)
+    except KeyError:
+        return jsonify({"ok": False, "errors": ["Analisador UFC indisponível"]}), 400
+    if not analyzer.validate_event_url(url):
+        return jsonify({"ok": False, "errors": ["URL de evento inválida"]}), 400
+    try:
+        analysis = analyzer.analyze(
+            url,
+            cache_dir=_cache_dir(),
+            cache_hours=24.0,
+            refresh=refresh,
+        )
+    except Exception as e:
+        return jsonify({"ok": False, "errors": [str(e) or type(e).__name__]}), 500
+    if not analysis.get("ok"):
+        return jsonify({"ok": False, "errors": analysis.get("errors") or ["Falha na análise"]}), 502
+    payload = _build_bet_suggestions(
+        analysis,
+        profile=profile,
+        top_limit=limit,
+        risky_limit=risky_limit,
+    )
+    return jsonify(payload)
 
 
 @app.route("/api/ufc/event-meta")
